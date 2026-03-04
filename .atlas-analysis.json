@@ -1,0 +1,107 @@
+{
+  "projectType": "framework",
+  "projectName": "Wirethread",
+  "projectDescription": "Open source Minecraft server framework with modular architecture and complete API for building custom servers.",
+  "theme": "aspen",
+  "primaryColor": "#10b981",
+  "lightColor": "#34d399",
+  "darkColor": "#059669",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/architecture",
+              "concepts/plugin-system",
+              "concepts/namespaces",
+              "concepts/registries",
+              "concepts/networking"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/server-setup",
+              "guides/creating-plugins",
+              "guides/packet-handling",
+              "guides/world-management",
+              "guides/block-system"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Core Module",
+            "pages": [
+              "api/core/overview",
+              "api/core/namespaces",
+              "api/core/registries",
+              "api/core/coordinates",
+              "api/core/blocks"
+            ]
+          },
+          {
+            "group": "Network Module",
+            "pages": [
+              "api/network/overview",
+              "api/network/packets",
+              "api/network/connections",
+              "api/network/codecs"
+            ]
+          },
+          {
+            "group": "Plugin Module",
+            "pages": [
+              "api/plugin/overview",
+              "api/plugin/pluggable"
+            ]
+          },
+          {
+            "group": "Server Module",
+            "pages": [
+              "api/server/overview",
+              "api/server/lifecycle",
+              "api/server/threads"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Multi-module architecture with core, network, plugin, and server components",
+    "Plugin system for extending server functionality",
+    "Netty-based network protocol handling for Minecraft 1.21.1",
+    "Namespace-based resource organization system",
+    "Registry system for game resources (blocks, biomes, recipes, advancements)",
+    "Multi-threaded server architecture with dedicated tick, socket, and message queue workers",
+    "Connection state management and packet encoding/decoding",
+    "Coordinate system with conversions and positioning"
+  ],
+  "publicApiSurface": [
+    "com.wirethread.server.Server - Main server abstraction",
+    "com.wirethread.plugin.Pluggable - Plugin interface",
+    "com.wirethread.core.namespaces.Namespace - Resource identification",
+    "com.wirethread.network.packet.Packet - Network packet interface",
+    "com.wirethread.network.connection.ConnectionManager - Connection handling",
+    "com.wirethread.core.registry.records.DynamicRegistries - Dynamic game registries",
+    "com.wirethread.core.registry.records.StaticRegistries - Static game registries",
+    "com.wirethread.core.block.BlockManager - Block management",
+    "com.wirethread.core.coordinates.Position - Position handling",
+    "com.wirethread.core.Tickable - Tick-based game loop interface"
+  ]
+}
