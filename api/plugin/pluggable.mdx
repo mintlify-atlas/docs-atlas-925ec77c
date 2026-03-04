@@ -1,0 +1,270 @@
+---
+title: Pluggable
+description: Core interface for implementing plugins in the Wirethread framework
+---
+
+The `Pluggable` interface is the foundational contract that all Wirethread plugins must implement. It defines the essential methods required for a plugin to identify itself within the framework's ecosystem.
+
+## Interface definition
+
+```java
+package com.wirethread.plugin;
+
+import com.wirethread.core.namespaces.Namespace;
+import org.intellij.lang.annotations.Pattern;
+import org.jetbrains.annotations.NotNull;
+
+public interface Pluggable {
+    
+    @NotNull
+    Namespace getPluginNamespace();
+    
+    @NotNull
+    @Pattern("[a-z0-9_\\-\\]+")
+    String getPluginName();
+}
+```
+
+**Package:** `com.wirethread.plugin`
+
+**Since:** 1.0.0
+
+## Methods
+
+### getPluginNamespace()
+
+Retrieves the plugin's namespace identifier.
+
+```java
+@NotNull
+Namespace getPluginNamespace()
+```
+
+**Returns:** A `Namespace` object that uniquely identifies this plugin within the ecosystem.
+
+**Description:**
+
+The namespace serves as the plugin's unique identifier across the entire Wirethread ecosystem. It follows the `domain:resource` format where:
+
+- **Domain:** Identifies the owner or source of the plugin (e.g., your plugin name)
+- **Resource:** Identifies the specific resource or component (e.g., "core", "api", "handler")
+
+Namespaces ensure that your plugin's resources don't conflict with other plugins or mods in the ecosystem.
+
+**Example:**
+
+```java
+@Override
+public Namespace getPluginNamespace() {
+    return new Namespace("customplugin", "main");
+}
+```
+
+See [Namespace](/api/core/namespace) for more details on creating and working with namespaces.
+
+---
+
+### getPluginName()
+
+Retrieves the plugin's human-readable name.
+
+```java
+@NotNull
+@Pattern("[a-z0-9_\\-\\]+")
+String getPluginName()
+```
+
+**Returns:** A string representing the plugin's name.
+
+**Constraints:**
+
+- Must match the pattern: `[a-z0-9_\-\]+`
+- Only lowercase letters (a-z), numbers (0-9), underscores (_), and hyphens (-) are allowed
+- Cannot be null (enforced by `@NotNull` annotation)
+- Should be descriptive and unique to your plugin
+
+**Description:**
+
+The plugin name is used for logging, debugging, and user-facing displays. Unlike the namespace, this is a simpler identifier that doesn't follow the `domain:resource` structure.
+
+**Example:**
+
+```java
+@Override
+public String getPluginName() {
+    return "custom-world-generator";
+}
+```
+
+## Implementation examples
+
+### Basic plugin
+
+```java
+import com.wirethread.plugin.Pluggable;
+import com.wirethread.core.namespaces.Namespace;
+import org.jetbrains.annotations.NotNull;
+
+public class BasicPlugin implements Pluggable {
+    
+    @Override
+    @NotNull
+    public Namespace getPluginNamespace() {
+        return new Namespace("basicplugin", "core");
+    }
+    
+    @Override
+    @NotNull
+    public String getPluginName() {
+        return "basic-plugin";
+    }
+}
+```
+
+### Plugin with configuration
+
+```java
+import com.wirethread.plugin.Pluggable;
+import com.wirethread.core.namespaces.Namespace;
+import org.jetbrains.annotations.NotNull;
+
+public class ConfigurablePlugin implements Pluggable {
+    
+    private final String domain;
+    private final String resource;
+    private final String name;
+    
+    public ConfigurablePlugin(String domain, String resource, String name) {
+        this.domain = domain;
+        this.resource = resource;
+        this.name = name;
+    }
+    
+    @Override
+    @NotNull
+    public Namespace getPluginNamespace() {
+        return new Namespace(domain, resource);
+    }
+    
+    @Override
+    @NotNull
+    public String getPluginName() {
+        return name;
+    }
+}
+```
+
+### Plugin with dynamic namespace
+
+```java
+import com.wirethread.plugin.Pluggable;
+import com.wirethread.core.namespaces.Namespace;
+import org.jetbrains.annotations.NotNull;
+
+public class DynamicPlugin implements Pluggable {
+    
+    private final Namespace baseNamespace;
+    
+    public DynamicPlugin() {
+        this.baseNamespace = new Namespace("dynamicplugin", "main");
+    }
+    
+    @Override
+    @NotNull
+    public Namespace getPluginNamespace() {
+        // You can extend or modify the namespace as needed
+        return baseNamespace.join("handlers");
+    }
+    
+    @Override
+    @NotNull
+    public String getPluginName() {
+        return "dynamic-plugin";
+    }
+}
+```
+
+## Best practices
+
+### Namespace design
+
+- Use your plugin's unique identifier as the domain
+- Use descriptive resource names that reflect the component's purpose
+- Keep namespaces under 255 characters total
+- Follow lowercase conventions for consistency
+
+### Plugin naming
+
+- Use hyphen-separated words for multi-word names (e.g., `world-generator`)
+- Keep names concise but descriptive
+- Avoid generic names that might conflict with other plugins
+- Use consistent naming across your plugin family (e.g., `myplugin-core`, `myplugin-api`)
+
+### Implementation
+
+- Make the methods lightweight - they may be called frequently
+- Consider caching the namespace and name if they're computed
+- Ensure thread-safety if your plugin is accessed from multiple threads
+- Use final fields for immutable plugin identifiers
+
+## Common patterns
+
+### Singleton plugin
+
+```java
+public class SingletonPlugin implements Pluggable {
+    
+    private static final SingletonPlugin INSTANCE = new SingletonPlugin();
+    private static final Namespace NAMESPACE = new Namespace("singleton", "plugin");
+    
+    private SingletonPlugin() {}
+    
+    public static SingletonPlugin getInstance() {
+        return INSTANCE;
+    }
+    
+    @Override
+    @NotNull
+    public Namespace getPluginNamespace() {
+        return NAMESPACE;
+    }
+    
+    @Override
+    @NotNull
+    public String getPluginName() {
+        return "singleton-plugin";
+    }
+}
+```
+
+### Abstract base plugin
+
+```java
+public abstract class BasePlugin implements Pluggable {
+    
+    protected final Namespace namespace;
+    protected final String name;
+    
+    protected BasePlugin(String domain, String resource, String name) {
+        this.namespace = new Namespace(domain, resource);
+        this.name = name;
+    }
+    
+    @Override
+    @NotNull
+    public final Namespace getPluginNamespace() {
+        return namespace;
+    }
+    
+    @Override
+    @NotNull
+    public final String getPluginName() {
+        return name;
+    }
+}
+```
+
+## See also
+
+- [Plugin overview](/api/plugin/overview) - Overview of the Plugin module
+- [Namespace](/api/core/namespace) - Detailed namespace documentation

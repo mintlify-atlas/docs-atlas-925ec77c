@@ -1,0 +1,339 @@
+---
+title: Creating plugins
+description: Build custom plugins for Wirethread using the Pluggable interface
+---
+
+Learn how to create plugins for Wirethread servers using the `Pluggable` interface and the namespace system.
+
+## What is a plugin?
+
+Plugins in Wirethread are modular components that extend server functionality. They use a namespace-based identification system to organize resources across the game ecosystem.
+
+## The Pluggable interface
+
+Every plugin must implement the `Pluggable` interface:
+
+```java
+package com.wirethread.plugin;
+
+import com.wirethread.core.namespaces.Namespace;
+import org.jetbrains.annotations.NotNull;
+
+public interface Pluggable {
+    
+    /**
+     * Retrieve the plugin's namespace.
+     */
+    @NotNull
+    Namespace getPluginNamespace();
+    
+    /**
+     * Retrieve the plugin's name.
+     */
+    @NotNull
+    String getPluginName();
+}
+```
+
+## Creating your first plugin
+
+<Steps>
+  <Step title="Implement the Pluggable interface">
+    Create a new class that implements `Pluggable`:
+
+    ```java
+    package com.example.myplugin;
+
+    import com.wirethread.plugin.Pluggable;
+    import com.wirethread.core.namespaces.Namespace;
+    import org.jetbrains.annotations.NotNull;
+
+    public class MyFirstPlugin implements Pluggable {
+        
+        private final Namespace namespace;
+        
+        public MyFirstPlugin() {
+            // Create namespace: "myplugin:core"
+            this.namespace = new Namespace("myplugin", "core");
+        }
+        
+        @Override
+        public @NotNull Namespace getPluginNamespace() {
+            return namespace;
+        }
+        
+        @Override
+        public @NotNull String getPluginName() {
+            return "my-first-plugin";
+        }
+    }
+    ```
+  </Step>
+
+  <Step title="Understand namespaces">
+    Namespaces follow the format `domain:path` where:
+    - **Domain**: Identifies who owns the resource (your plugin name)
+    - **Path**: Identifies the specific resource
+
+    ```java
+    // Basic namespace
+    Namespace ns1 = new Namespace("myplugin", "core");
+    // Result: "myplugin:core"
+
+    // Namespace with default path
+    Namespace ns2 = new Namespace("myplugin");
+    // Result: "myplugin:default"
+
+    // Namespace with tag
+    Namespace ns3 = new Namespace("myplugin", "items", "diamond_sword");
+    // Result: "myplugin:diamond_sword"
+    ```
+  </Step>
+
+  <Step title="Add plugin functionality">
+    Extend your plugin with custom features:
+
+    ```java
+    package com.example.myplugin;
+
+    import com.wirethread.plugin.Pluggable;
+    import com.wirethread.core.namespaces.Namespace;
+    import org.apache.logging.log4j.LogManager;
+    import org.apache.logging.log4j.Logger;
+    import org.jetbrains.annotations.NotNull;
+
+    public class CustomGamePlugin implements Pluggable {
+        
+        private static final Logger LOGGER = LogManager.getLogger(CustomGamePlugin.class);
+        private final Namespace namespace;
+        
+        public CustomGamePlugin() {
+            this.namespace = new Namespace("customgame", "main");
+            LOGGER.info("Initializing {} plugin", getPluginName());
+        }
+        
+        @Override
+        public @NotNull Namespace getPluginNamespace() {
+            return namespace;
+        }
+        
+        @Override
+        public @NotNull String getPluginName() {
+            return "custom-game";
+        }
+        
+        public void onEnable() {
+            LOGGER.info("{} enabled successfully", getPluginName());
+        }
+        
+        public void onDisable() {
+            LOGGER.info("{} disabled", getPluginName());
+        }
+    }
+    ```
+  </Step>
+</Steps>
+
+## Working with namespaces
+
+### Creating namespaces
+
+The `Namespace` class provides multiple constructors:
+
+```java
+// Domain and path
+Namespace ns1 = new Namespace("myplugin", "items/sword");
+
+// Domain only (uses "default" as path)
+Namespace ns2 = new Namespace("myplugin");
+
+// Using static factory method
+Namespace ns3 = Namespace.of("myplugin", "blocks/stone");
+```
+
+### Joining namespaces
+
+Combine namespace paths:
+
+```java
+Namespace base = new Namespace("myplugin", "items");
+
+// Join with custom separator
+Namespace joined1 = base.join("/", "weapons");
+// Result: "myplugin:items/weapons"
+
+// Join with default separator (/)
+Namespace joined2 = base.join("armor");
+// Result: "myplugin:items/armor"
+```
+
+### Namespace validation
+
+Namespaces have strict validation rules:
+
+```java
+// Valid domains and paths use: a-z, 0-9, _, -, /
+boolean isValidDomain = Namespace.assertValidDomain("my_plugin"); // true
+boolean isValidPath = Namespace.assertValidPath("items/sword"); // true
+
+// Invalid characters will throw IllegalArgumentException
+try {
+    Namespace invalid = new Namespace("My-Plugin", "path"); // Uppercase not allowed
+} catch (IllegalArgumentException e) {
+    // Handle validation error
+}
+```
+
+### Namespace properties
+
+Access namespace components:
+
+```java
+Namespace ns = new Namespace("myplugin", "items/diamond_sword");
+
+String domain = ns.domain(); // "myplugin"
+String path = ns.path(); // "items/diamond_sword"
+String fullName = ns.toString(); // "myplugin:items/diamond_sword"
+```
+
+## Plugin naming conventions
+
+The plugin name must follow these rules:
+- Use lowercase letters, numbers, underscores, and hyphens
+- Pattern: `[a-z0-9_\-\]+`
+- Be descriptive and unique
+
+```java
+// Good plugin names
+"my-awesome-plugin"     // Valid
+"game_mechanics"        // Valid
+"pvp-arena-2"          // Valid
+
+// Bad plugin names
+"MyPlugin"             // Contains uppercase
+"my plugin"            // Contains space
+"plugin!"              // Contains special character
+```
+
+## Advanced plugin example
+
+Here's a complete plugin with resource management:
+
+```java
+package com.example.customplugin;
+
+import com.wirethread.plugin.Pluggable;
+import com.wirethread.core.namespaces.Namespace;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.jetbrains.annotations.NotNull;
+
+import java.util.HashMap;
+import java.util.Map;
+
+public class ResourcePlugin implements Pluggable {
+    
+    private static final Logger LOGGER = LogManager.getLogger(ResourcePlugin.class);
+    private final Namespace baseNamespace;
+    private final Map<String, Namespace> resources;
+    
+    public ResourcePlugin() {
+        this.baseNamespace = new Namespace("resourceplugin");
+        this.resources = new HashMap<>();
+        initializeResources();
+    }
+    
+    private void initializeResources() {
+        // Register plugin resources with namespaces
+        resources.put("items", baseNamespace.join("items"));
+        resources.put("blocks", baseNamespace.join("blocks"));
+        resources.put("entities", baseNamespace.join("entities"));
+        
+        LOGGER.info("Registered {} resource namespaces", resources.size());
+    }
+    
+    @Override
+    public @NotNull Namespace getPluginNamespace() {
+        return baseNamespace;
+    }
+    
+    @Override
+    public @NotNull String getPluginName() {
+        return "resource-plugin";
+    }
+    
+    public Namespace getResourceNamespace(String resourceType) {
+        return resources.get(resourceType);
+    }
+    
+    public Namespace createItemNamespace(String itemName) {
+        Namespace itemsNs = resources.get("items");
+        return itemsNs.join(itemName);
+    }
+}
+```
+
+## Best practices
+
+<AccordionGroup>
+  <Accordion title="Use unique domain names">
+    Choose a domain name that uniquely identifies your plugin to avoid conflicts with other plugins.
+    
+    ```java
+    // Good - unique and descriptive
+    new Namespace("mycompany_customplugin", "core")
+    
+    // Bad - too generic
+    new Namespace("plugin", "core")
+    ```
+  </Accordion>
+
+  <Accordion title="Organize resources with paths">
+    Use hierarchical paths to organize plugin resources logically.
+    
+    ```java
+    Namespace items = new Namespace("myplugin", "items");
+    Namespace weapons = items.join("weapons");
+    Namespace sword = weapons.join("diamond_sword");
+    // Result: "myplugin:items/weapons/diamond_sword"
+    ```
+  </Accordion>
+
+  <Accordion title="Validate user input">
+    Always validate namespace components from external sources.
+    
+    ```java
+    public Namespace createSafeNamespace(String domain, String path) {
+        if (!Namespace.assertValidDomain(domain)) {
+            throw new IllegalArgumentException("Invalid domain: " + domain);
+        }
+        if (!Namespace.assertValidPath(path)) {
+            throw new IllegalArgumentException("Invalid path: " + path);
+        }
+        return new Namespace(domain, path);
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Cache namespace instances">
+    Reuse namespace instances instead of creating new ones repeatedly.
+    
+    ```java
+    public class MyPlugin implements Pluggable {
+        private final Namespace baseNamespace;
+        private final Namespace itemsNamespace;
+        
+        public MyPlugin() {
+            this.baseNamespace = new Namespace("myplugin");
+            this.itemsNamespace = baseNamespace.join("items");
+        }
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next steps
+
+- Handle network packets in the [Packet handling](/guides/packet-handling) guide
+- Work with blocks in the [Block system](/guides/block-system) guide
+- Learn about world management in the [World management](/guides/world-management) guide

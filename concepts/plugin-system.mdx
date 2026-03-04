@@ -1,0 +1,310 @@
+---
+title: Plugin system
+description: Extending Wirethread with custom plugins using the Pluggable interface
+---
+
+Wirethread's plugin system allows developers to extend server functionality without modifying core code. All plugins implement the `Pluggable` interface, which provides namespace-based identification.
+
+## The Pluggable interface
+
+Every plugin must implement the `Pluggable` interface:
+
+```java
+package com.wirethread.plugin;
+
+import com.wirethread.core.namespaces.Namespace;
+import org.intellij.lang.annotations.Pattern;
+import org.jetbrains.annotations.NotNull;
+
+public interface Pluggable {
+
+    /**
+     * Retrieve the plugin's namespace.
+     *
+     * @return A {@link Namespace}.
+     */
+    @NotNull
+    Namespace getPluginNamespace();
+
+    /**
+     * Retrieve the plugin's name.
+     *
+     * @return A human-readable name.
+     */
+    @NotNull
+    @Pattern("[a-z0-9_\\-\\]+")
+    String getPluginName();
+}
+```
+
+### Key requirements
+
+<Steps>
+  <Step title="Provide a unique namespace">
+    Every plugin must return a unique `Namespace` that identifies it across the ecosystem. This prevents conflicts between plugins.
+  </Step>
+  
+  <Step title="Specify a valid plugin name">
+    Plugin names must match the pattern `[a-z0-9_-]+` - lowercase letters, numbers, underscores, and hyphens only.
+  </Step>
+</Steps>
+
+## Creating a plugin
+
+Here's a basic plugin implementation:
+
+```java
+import com.wirethread.core.namespaces.Namespace;
+import com.wirethread.plugin.Pluggable;
+import org.jetbrains.annotations.NotNull;
+
+public class MyPlugin implements Pluggable {
+    
+    private static final Namespace NAMESPACE = 
+        Namespace.of("myplugin", "core");
+    
+    @Override
+    public @NotNull Namespace getPluginNamespace() {
+        return NAMESPACE;
+    }
+    
+    @Override
+    public @NotNull String getPluginName() {
+        return "my-plugin";
+    }
+    
+    // Plugin initialization logic
+    public void onEnable() {
+        // Register event listeners, commands, etc.
+    }
+    
+    public void onDisable() {
+        // Cleanup resources
+    }
+}
+```
+
+## Namespace-based organization
+
+Plugins use namespaces to organize their resources:
+
+<CodeGroup>
+
+```java Plugin Resources
+// Base plugin namespace
+Namespace pluginNamespace = Namespace.of("myplugin", "core");
+
+// Custom blocks
+Namespace customBlock = Namespace.of("myplugin", "blocks/custom_ore");
+
+// Custom items
+Namespace customItem = Namespace.of("myplugin", "items/magic_sword");
+
+// Custom entities
+Namespace customEntity = Namespace.of("myplugin", "entities/boss");
+```
+
+```java Using join() method
+// Create base namespace
+Namespace base = Namespace.of("myplugin", "items");
+
+// Add subpaths
+Namespace sword = base.join("sword");        // myplugin:items/sword
+Namespace shield = base.join("shield");      // myplugin:items/shield
+Namespace potion = base.join("potions/fire"); // myplugin:items/potions/fire
+```
+
+</CodeGroup>
+
+<Tip>
+  Using a consistent namespace structure helps organize plugin resources and prevents conflicts with other plugins.
+</Tip>
+
+## Plugin lifecycle
+
+While the `Pluggable` interface defines basic identification, plugins typically implement additional lifecycle methods:
+
+<AccordionGroup>
+  <Accordion title="Initialization phase">
+    Plugins are loaded and their namespaces are registered with the server. This is where you'd register custom resources in registries.
+  </Accordion>
+  
+  <Accordion title="Enable phase">
+    The plugin becomes active. Register event listeners, commands, and start background tasks.
+  </Accordion>
+  
+  <Accordion title="Runtime phase">
+    The plugin responds to events and processes game logic.
+  </Accordion>
+  
+  <Accordion title="Disable phase">
+    The plugin is being shut down. Clean up resources, save data, and unregister listeners.
+  </Accordion>
+</AccordionGroup>
+
+## Resource registration
+
+Plugins typically register custom resources with the server's registry system:
+
+```java
+import com.wirethread.core.registry.repository.Registry;
+import com.wirethread.core.registry.repository.Registrable;
+import com.wirethread.core.namespaces.Namespace;
+
+public class CustomBlock implements Registrable {
+    private final Namespace namespace;
+    
+    public CustomBlock(String pluginDomain, String blockName) {
+        this.namespace = Namespace.of(pluginDomain, "blocks/" + blockName);
+    }
+    
+    @Override
+    public Namespace namespace() {
+        return namespace;
+    }
+    
+    // Block behavior implementation...
+}
+
+// In your plugin:
+public void registerBlocks(Registry<CustomBlock> blockRegistry) {
+    CustomBlock oreBlock = new CustomBlock("myplugin", "custom_ore");
+    blockRegistry.register(oreBlock);
+}
+```
+
+See [Registries](/concepts/registries) for more information on the registry system.
+
+## Best practices
+
+<CardGroup cols={2}>
+  <Card title="Use unique namespaces" icon="fingerprint">
+    Always use your plugin's domain in namespaces to avoid conflicts: `myplugin:resource` not `minecraft:resource`
+  </Card>
+  
+  <Card title="Follow naming conventions" icon="spell-check">
+    Use lowercase, hyphens for plugin names, and forward slashes for namespace paths
+  </Card>
+  
+  <Card title="Clean up resources" icon="broom">
+    Always unregister listeners and clean up resources when your plugin is disabled
+  </Card>
+  
+  <Card title="Document your API" icon="book">
+    If your plugin exposes an API for other plugins, document it thoroughly
+  </Card>
+</CardGroup>
+
+## Example: Full plugin structure
+
+```java
+import com.wirethread.core.namespaces.Namespace;
+import com.wirethread.plugin.Pluggable;
+import org.jetbrains.annotations.NotNull;
+
+public class ExamplePlugin implements Pluggable {
+    
+    private static final String DOMAIN = "example";
+    private final Namespace namespace;
+    private boolean enabled;
+    
+    public ExamplePlugin() {
+        this.namespace = Namespace.of(DOMAIN, "core");
+        this.enabled = false;
+    }
+    
+    @Override
+    public @NotNull Namespace getPluginNamespace() {
+        return namespace;
+    }
+    
+    @Override
+    public @NotNull String getPluginName() {
+        return "example-plugin";
+    }
+    
+    public void onLoad() {
+        // Early initialization - before server starts
+        System.out.println("Loading " + getPluginName());
+    }
+    
+    public void onEnable() {
+        // Plugin activation
+        enabled = true;
+        
+        // Register custom resources
+        registerBlocks();
+        registerItems();
+        
+        // Register event listeners
+        registerListeners();
+        
+        System.out.println(getPluginName() + " enabled!");
+    }
+    
+    public void onDisable() {
+        // Plugin deactivation
+        enabled = false;
+        
+        // Clean up
+        unregisterListeners();
+        saveData();
+        
+        System.out.println(getPluginName() + " disabled!");
+    }
+    
+    private void registerBlocks() {
+        // Register custom blocks with namespaced identifiers
+    }
+    
+    private void registerItems() {
+        // Register custom items
+    }
+    
+    private void registerListeners() {
+        // Register event listeners
+    }
+    
+    private void unregisterListeners() {
+        // Unregister all listeners
+    }
+    
+    private void saveData() {
+        // Persist plugin data
+    }
+    
+    public boolean isEnabled() {
+        return enabled;
+    }
+}
+```
+
+## Module dependency
+
+The plugin module depends on `wirethread-core` for namespace support:
+
+```kotlin
+// settings.gradle.kts
+include(
+    "wirethread-core",
+    "wirethread-network",
+    "wirethread-plugin",
+    "wirethread-server",
+)
+```
+
+This ensures plugins have access to core abstractions like `Namespace`, `Registry`, and `Manager` interfaces.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Namespaces" icon="tag" href="/concepts/namespaces">
+    Learn more about namespace-based resource identification
+  </Card>
+  <Card title="Registries" icon="database" href="/concepts/registries">
+    Understand how to register custom resources
+  </Card>
+  <Card title="Architecture" icon="sitemap" href="/concepts/architecture">
+    Explore the overall framework architecture
+  </Card>
+</CardGroup>

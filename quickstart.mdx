@@ -1,80 +1,215 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quickstart
+description: Get a Wirethread server running in minutes
 ---
 
-## Get started in three steps
+<Note>
+  This guide will help you create a basic Wirethread server that starts and listens for connections.
+</Note>
 
-Get your documentation site running locally and make your first customization.
+## Prerequisites
 
-### Step 1: Set up your local environment
+Before you begin, ensure you have:
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+- Java Development Kit (JDK) 17 or higher
+- Gradle 7.0 or higher
+- Basic knowledge of Java programming
 
-### Step 2: Deploy your changes
+## Create your server
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+Follow these steps to create a minimal Wirethread server:
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+<Steps>
+  <Step title="Set up your Gradle project">
+    Create a new Gradle project and add Wirethread modules to your `build.gradle.kts`:
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+    ```kotlin build.gradle.kts
+    plugins {
+        id("java")
+    }
 
-### Step 3: Go live
+    group = "com.example.myserver"
+    version = "1.0.0"
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+    repositories {
+        mavenCentral()
+    }
+
+    dependencies {
+        implementation("io.netty:netty-all:4.1.121.Final")
+        implementation("org.apache.logging.log4j:log4j-core:2.23.1")
+        implementation("org.jetbrains:annotations:24.0.0")
+        
+        // Add Wirethread modules as project dependencies
+        // (or from Maven/GitHub packages when published)
+    }
+    ```
+
+    <Info>
+      Currently, Wirethread modules must be included as local project dependencies. See the [installation guide](/installation) for details.
+    </Info>
+  </Step>
+
+  <Step title="Create a server class">
+    Create a Java class that extends `Server` from the Wirethread framework:
+
+    ```java MyMinecraftServer.java
+    package com.example.myserver;
+
+    import com.wirethread.server.Server;
+    import java.net.InetSocketAddress;
+    import java.net.SocketAddress;
+
+    public final class MyMinecraftServer extends Server {
+        
+        public static void main(String[] args) {
+            // Get the Java runtime for shutdown hooks
+            final Runtime runtime = Runtime.getRuntime();
+            
+            // Create a new server instance
+            final MyMinecraftServer server = new MyMinecraftServer();
+            
+            // Define the address and port
+            final SocketAddress serverAddress = new InetSocketAddress("localhost", 25565);
+            
+            // Start the server
+            server.start(serverAddress);
+            
+            // Register shutdown hook for graceful termination
+            runtime.addShutdownHook(new Thread(server::stop));
+        }
+    }
+    ```
+
+    <Tip>
+      The `Server` class is abstract, allowing you to extend it with custom behavior while inheriting core functionality.
+    </Tip>
+  </Step>
+
+  <Step title="Start your server">
+    Run your server using Gradle:
+
+    ```bash
+    ./gradlew run
+    ```
+
+    You should see output indicating the server has started:
+
+    ```
+    [INFO] Starting Wirethread server.
+    ```
+
+    Your server is now running and listening for connections on `localhost:25565`!
+  </Step>
+</Steps>
+
+## Understanding the code
+
+Let's break down what's happening in your server:
+
+### Server initialization
+
+The `Server` class provides the foundation for your Minecraft server:
+
+```java
+final MyMinecraftServer server = new MyMinecraftServer();
+```
+
+When you create a server instance, it initializes:
+- Server state management (STOPPED/STARTED)
+- Server process managers (connection, benchmark, exception handlers)
+- Dynamic and static game registries
+
+### Starting the server
+
+The `start()` method accepts either a `SocketAddress` or address/port combination:
+
+<CodeGroup>
+```java Using SocketAddress
+final SocketAddress address = new InetSocketAddress("localhost", 25565);
+server.start(address);
+```
+
+```java Using address and port
+server.start("localhost", 25565);
+```
+</CodeGroup>
+
+When started, the server:
+1. Transitions from `STOPPED` to `STARTED` state
+2. Initializes three worker threads:
+   - **SocketServerThread** - Handles incoming network connections
+   - **TickServerThread** - Manages the game tick loop
+   - **MQServerThread** - Processes the message queue
+
+### Graceful shutdown
+
+```java
+runtime.addShutdownHook(new Thread(server::stop));
+```
+
+This ensures that when your application terminates (via Ctrl+C or kill signal), the server stops gracefully by:
+- Shutting down all worker threads
+- Closing active connections
+- Cleaning up resources
+
+## Server lifecycle
+
+The server has two states managed atomically:
+
+<Steps>
+  <Step title="STOPPED">
+    Initial state when the server is created or has been shut down.
+  </Step>
+  
+  <Step title="STARTED">
+    Active state when the server is running and accepting connections.
+  </Step>
+</Steps>
+
+<Warning>
+  You cannot restart a stopped server. The state transition is one-way: `STOPPED → STARTED → STOPPED`.
+</Warning>
 
 ## Next steps
 
-Now that you have your docs running, explore these key features:
+Now that you have a basic server running, explore these topics:
 
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Installation" icon="download" href="/installation">
+    Learn about Gradle configuration and module dependencies
+  </Card>
+  
+  <Card title="Server architecture" icon="sitemap" href="/concepts/architecture">
+    Understand the server's internal components
+  </Card>
+  
+  <Card title="Plugin system" icon="puzzle-piece" href="/guides/creating-plugins">
+    Extend your server with plugins
+  </Card>
+  
+  <Card title="Packet handling" icon="bolt" href="/guides/packet-handling">
+    Handle network packets and connections
+  </Card>
 </CardGroup>
 
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Port already in use">
+    If you see a "port already in use" error, either:
+    - Stop any other servers running on port 25565
+    - Change the port number: `server.start("localhost", 25566);`
+  </Accordion>
+  
+  <Accordion title="Server won't start">
+    Check that:
+    - All Wirethread dependencies are properly included
+    - You're using Java 17 or higher
+    - Log4j configuration is present in your resources
+  </Accordion>
+  
+  <Accordion title="IllegalStateException: Server already started">
+    You're attempting to start a server that's already running. Each server instance can only be started once.
+  </Accordion>
+</AccordionGroup>

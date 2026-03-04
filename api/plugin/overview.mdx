@@ -1,0 +1,74 @@
+---
+title: Plugin module overview
+description: Overview of the Wirethread Plugin module for creating extensible plugins
+---
+
+The Plugin module provides the core interface and utilities for creating extensible plugins in the Wirethread framework. It enables developers to build modular components that can be dynamically loaded and integrated into the game ecosystem.
+
+## Key concepts
+
+The Plugin module is built around the concept of **pluggable components** - modular pieces of functionality that can be registered, discovered, and managed by the framework. Each plugin must implement the `Pluggable` interface to participate in the plugin system.
+
+### Namespaces
+
+Plugins use namespaces to uniquely identify themselves within the ecosystem. Namespaces follow the `domain:resource` format, which allows for:
+
+- **Unique identification** across different plugins and mods
+- **Resource organization** in a hierarchical structure
+- **Conflict prevention** between different plugin sources
+
+For more details on namespaces, see the [Namespace documentation](/api/core/namespace).
+
+## Core interfaces
+
+<CardGroup cols={1}>
+  <Card title="Pluggable" icon="plug" href="/api/plugin/pluggable">
+    The primary interface that all plugins must implement
+  </Card>
+</CardGroup>
+
+## Basic usage
+
+To create a plugin, implement the `Pluggable` interface:
+
+```java
+import com.wirethread.plugin.Pluggable;
+import com.wirethread.core.namespaces.Namespace;
+
+public class MyPlugin implements Pluggable {
+    
+    @Override
+    public Namespace getPluginNamespace() {
+        return new Namespace("myplugin", "core");
+    }
+    
+    @Override
+    public String getPluginName() {
+        return "my-custom-plugin";
+    }
+}
+```
+
+## Plugin naming conventions
+
+Plugin names must follow these rules:
+
+- Use lowercase letters, numbers, underscores, and hyphens only
+- Pattern: `[a-z0-9_\-\]+`
+- Keep names descriptive but concise
+- Use hyphens to separate words (e.g., `world-generator`, `custom-items`)
+
+## Package structure
+
+The Plugin module is located at:
+
+```
+com.wirethread.plugin
+├── Pluggable (interface)
+└── [future plugin utilities]
+```
+
+## See also
+
+- [Pluggable interface](/api/plugin/pluggable) - Detailed API reference
+- [Namespace](/api/core/namespace) - Understanding namespaces in Wirethread

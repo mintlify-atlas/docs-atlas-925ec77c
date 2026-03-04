@@ -1,0 +1,445 @@
+---
+title: World management
+description: Manage worlds, dimensions, and coordinates in Wirethread
+---
+
+Learn how to work with worlds, dimensions, and spatial coordinates in the Wirethread framework.
+
+## World manager
+
+The `WorldManager` is part of the server's process managers and handles all world-related operations:
+
+```java
+package com.wirethread.core.world;
+
+public final class WorldManager {
+    // World management implementation
+}
+```
+
+Access the world manager from your server:
+
+```java
+import com.wirethread.server.Server;
+import com.wirethread.core.world.WorldManager;
+
+public class MyServer extends Server {
+    
+    public void setupWorld() {
+        WorldManager worldManager = serverProcess.worldManager();
+        // Configure and manage worlds
+    }
+}
+```
+
+## Working with coordinates
+
+Wirethread provides a comprehensive coordinate system for 3D positioning and orientation.
+
+### Position
+
+The `Position` record represents a location with coordinates and view angles:
+
+```java
+package com.wirethread.core.coordinates;
+
+import org.jetbrains.annotations.NotNull;
+
+/**
+ * Represents a position in 3D space with x, y, z coordinates,
+ * plus yaw and pitch angles.
+ */
+public record Position(
+    double x, 
+    double y, 
+    double z, 
+    float yaw, 
+    float pitch
+) implements Point {
+    
+    public static final Position ZERO = new Position(0, 0, 0);
+    
+    // Yaw is automatically clamped between -180 and 180 degrees
+    public Position {
+        yaw %= 360f;
+        if (yaw >= 180f) yaw -= 360f;
+        if (yaw < -180f) yaw += 360f;
+    }
+}
+```
+
+### Creating positions
+
+<Steps>
+  <Step title="Basic position creation">
+    Create positions with different constructors:
+
+    ```java
+    import com.wirethread.core.coordinates.Position;
+
+    // Full position with coordinates and view angles
+    Position pos1 = new Position(100.0, 64.0, 200.0, 90.0f, 0.0f);
+
+    // Position with coordinates only (yaw and pitch default to 0)
+    Position pos2 = new Position(100.0, 64.0, 200.0);
+
+    // Zero position
+    Position origin = Position.ZERO; // (0, 0, 0, 0, 0)
+
+    // From a Point
+    Point point = /* ... */;
+    Position pos3 = new Position(point);
+    Position pos4 = new Position(point, 45.0f, -15.0f);
+    ```
+  </Step>
+
+  <Step title="Modify positions immutably">
+    Use `with*` methods to create new positions:
+
+    ```java
+    Position original = new Position(100, 64, 200, 0, 0);
+
+    // Update coordinates
+    Position moved = original.withXYZ(110, 64, 200);
+
+    // Update individual coordinate
+    Position higher = original.withY(80);
+
+    // Update view angles
+    Position turned = original.withYaw(90.0f);
+    Position looking = original.withPitch(-45.0f);
+    Position newView = original.withView(90.0f, -45.0f);
+
+    // Copy coordinates or view from another position
+    Position other = new Position(150, 70, 250, 180.0f, 30.0f);
+    Position sameLocation = original.withXYZ(other);
+    Position sameView = original.withView(other);
+    ```
+  </Step>
+
+  <Step title="Calculate directions">
+    Make a position face a specific direction:
+
+    ```java
+    import com.wirethread.core.coordinates.Point;
+
+    Position player = new Position(100, 64, 200);
+
+    // Direction vector (normalized)
+    Point direction = new Point() {
+        public double x() { return 1.0; }
+        public double y() { return 0.0; }
+        public double z() { return 0.0; }
+    };
+
+    // Create position facing the direction
+    Position facing = player.withDirection(direction);
+    // Automatically calculates yaw and pitch
+    ```
+  </Step>
+</Steps>
+
+### Position operations
+
+Perform mathematical operations on positions:
+
+```java
+Position pos = new Position(100, 64, 200);
+
+// Add values
+Position moved1 = pos.add(10, 5, 10);      // (110, 69, 210)
+Position moved2 = pos.add(5);              // (105, 69, 205)
+
+// Subtract values
+Position back1 = pos.sub(10, 0, 10);       // (90, 64, 190)
+Position back2 = pos.sub(5);               // (95, 59, 195)
+
+// Multiply
+Position scaled1 = pos.mul(2, 1, 2);       // (200, 64, 400)
+Position scaled2 = pos.mul(2);             // (200, 128, 400)
+
+// Divide
+Position half1 = pos.div(2, 1, 2);         // (50, 64, 100)
+Position half2 = pos.div(2);               // (50, 32, 100)
+```
+
+### Using operators
+
+Apply functions to individual coordinates:
+
+```java
+import java.util.function.DoubleUnaryOperator;
+
+Position pos = new Position(100, 64, 200);
+
+// Floor the Y coordinate
+Position floored = pos.withY(y -> Math.floor(y));
+
+// Double the X coordinate
+Position doubleX = pos.withX(x -> x * 2);
+
+// Apply custom function to Z
+DoubleUnaryOperator clamp = z -> Math.max(0, Math.min(255, z));
+Position clamped = pos.withZ(clamp);
+```
+
+## Point interface
+
+The `Point` interface defines basic 3D coordinates:
+
+```java
+package com.wirethread.core.coordinates;
+
+import org.jetbrains.annotations.NotNull;
+import java.util.function.DoubleUnaryOperator;
+
+public interface Point {
+    double x();
+    double y();
+    double z();
+    
+    @NotNull Point withX(double x);
+    @NotNull Point withY(double y);
+    @NotNull Point withZ(double z);
+    
+    @NotNull Point withX(DoubleUnaryOperator operator);
+    @NotNull Point withY(DoubleUnaryOperator operator);
+    @NotNull Point withZ(DoubleUnaryOperator operator);
+    
+    @NotNull Point add(double value);
+    @NotNull Point add(double x, double y, double z);
+    
+    @NotNull Point sub(double value);
+    @NotNull Point sub(double x, double y, double z);
+    
+    @NotNull Point mul(double value);
+    @NotNull Point mul(double x, double y, double z);
+    
+    @NotNull Point div(double value);
+    @NotNull Point div(double x, double y, double z);
+}
+```
+
+## Directions
+
+The `Direction` enum represents cardinal and vertical directions:
+
+```java
+import com.wirethread.core.coordinates.Direction;
+
+// Available directions
+Direction.UP
+Direction.DOWN
+Direction.NORTH
+Direction.SOUTH
+Direction.EAST
+Direction.WEST
+```
+
+Use directions for block operations:
+
+```java
+import com.wirethread.core.block.BlockFace;
+import com.wirethread.core.coordinates.Direction;
+
+public class BlockHelper {
+    
+    public Position getAdjacentPosition(Position pos, Direction direction) {
+        return switch (direction) {
+            case UP -> pos.withY(y -> y + 1);
+            case DOWN -> pos.withY(y -> y - 1);
+            case NORTH -> pos.withZ(z -> z - 1);
+            case SOUTH -> pos.withZ(z -> z + 1);
+            case EAST -> pos.withX(x -> x + 1);
+            case WEST -> pos.withX(x -> x - 1);
+        };
+    }
+}
+```
+
+## Biomes
+
+Wirethread includes a biome system:
+
+```java
+import com.wirethread.core.biome.BiomeType;
+
+// BiomeType enum contains all Minecraft biomes
+public enum BiomeType {
+    PLAINS,
+    FOREST,
+    MOUNTAINS,
+    DESERT,
+    OCEAN,
+    // ... and more
+}
+```
+
+## Practical examples
+
+### Player teleportation
+
+```java
+import com.wirethread.core.coordinates.Position;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
+public class TeleportManager {
+    
+    private static final Logger LOGGER = LogManager.getLogger(TeleportManager.class);
+    
+    public void teleportPlayer(Player player, Position destination) {
+        Position current = player.getPosition();
+        
+        LOGGER.info("Teleporting {} from {} to {}", 
+                   player.getName(), current, destination);
+        
+        // Keep player's view direction
+        Position newPos = destination.withView(current);
+        player.setPosition(newPos);
+    }
+    
+    public Position findSafeSpawn(Position requested) {
+        // Find the highest solid block at the X,Z coordinates
+        Position safe = requested;
+        
+        // Clamp Y coordinate between 0 and 256
+        safe = safe.withY(y -> Math.max(0, Math.min(256, y)));
+        
+        // Add 1 block above ground for player spawn
+        safe = safe.withY(y -> y + 1);
+        
+        return safe;
+    }
+}
+```
+
+### Distance calculations
+
+```java
+import com.wirethread.core.coordinates.Position;
+
+public class DistanceUtils {
+    
+    public static double distance(Position pos1, Position pos2) {
+        double dx = pos2.x() - pos1.x();
+        double dy = pos2.y() - pos1.y();
+        double dz = pos2.z() - pos1.z();
+        return Math.sqrt(dx * dx + dy * dy + dz * dz);
+    }
+    
+    public static double distance2D(Position pos1, Position pos2) {
+        double dx = pos2.x() - pos1.x();
+        double dz = pos2.z() - pos1.z();
+        return Math.sqrt(dx * dx + dz * dz);
+    }
+    
+    public static boolean isInRange(Position pos1, Position pos2, double range) {
+        return distance(pos1, pos2) <= range;
+    }
+}
+```
+
+### Area operations
+
+```java
+import com.wirethread.core.coordinates.Position;
+import java.util.ArrayList;
+import java.util.List;
+
+public class AreaManager {
+    
+    public record BoundingBox(Position min, Position max) {
+        
+        public boolean contains(Position pos) {
+            return pos.x() >= min.x() && pos.x() <= max.x()
+                && pos.y() >= min.y() && pos.y() <= max.y()
+                && pos.z() >= min.z() && pos.z() <= max.z();
+        }
+        
+        public List<Position> getCorners() {
+            List<Position> corners = new ArrayList<>();
+            for (double x : new double[]{min.x(), max.x()}) {
+                for (double y : new double[]{min.y(), max.y()}) {
+                    for (double z : new double[]{min.z(), max.z()}) {
+                        corners.add(new Position(x, y, z));
+                    }
+                }
+            }
+            return corners;
+        }
+    }
+    
+    public static BoundingBox createBox(Position center, double radius) {
+        Position min = center.sub(radius);
+        Position max = center.add(radius);
+        return new BoundingBox(min, max);
+    }
+}
+```
+
+## Best practices
+
+<AccordionGroup>
+  <Accordion title="Use immutable positions">
+    Position is a record and immutable. Always create new instances rather than trying to modify.
+    
+    ```java
+    // Good - creates new position
+    Position newPos = oldPos.withY(newY);
+    
+    // Won't work - Position is immutable
+    // oldPos.y = newY; // Compile error
+    ```
+  </Accordion>
+
+  <Accordion title="Understand yaw normalization">
+    Yaw values are automatically normalized to the range [-180, 180].
+    
+    ```java
+    Position pos1 = new Position(0, 0, 0, 270, 0);
+    // pos1.yaw() returns -90.0f (normalized)
+    
+    Position pos2 = new Position(0, 0, 0, -270, 0);
+    // pos2.yaw() returns 90.0f (normalized)
+    ```
+  </Accordion>
+
+  <Accordion title="Use Position.ZERO for origin">
+    Instead of creating new zero positions, use the constant.
+    
+    ```java
+    // Good - reuse constant
+    Position origin = Position.ZERO;
+    
+    // Avoid - creates unnecessary object
+    Position origin = new Position(0, 0, 0);
+    ```
+  </Accordion>
+
+  <Accordion title="Cache frequently used positions">
+    Store commonly used positions to avoid repeated calculations.
+    
+    ```java
+    public class SpawnManager {
+        private final Position worldSpawn;
+        private final Position netherSpawn;
+        
+        public SpawnManager() {
+            this.worldSpawn = new Position(0, 64, 0);
+            this.netherSpawn = new Position(0, 64, 0);
+        }
+        
+        public Position getSpawn(Dimension dimension) {
+            return dimension == Dimension.NETHER ? netherSpawn : worldSpawn;
+        }
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next steps
+
+- Learn about blocks in the [Block system](/guides/block-system) guide
+- Handle packets in the [Packet handling](/guides/packet-handling) guide
+- Create plugins in the [Creating plugins](/guides/creating-plugins) guide

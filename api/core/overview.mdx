@@ -1,0 +1,131 @@
+---
+title: Core module overview
+description: Core components and utilities for the Wirethread framework
+---
+
+The Wirethread Core module provides fundamental building blocks for server-side development in the Wirethread framework. It includes essential systems for resource management, coordinate handling, and game mechanics.
+
+## Key components
+
+The Core module is organized into several key areas:
+
+### Namespaces
+
+Namespaces provide a declarative way to identify and organize resources across the game ecosystem. They follow the format `domain:path` where:
+- **Domain**: Identifies the space which a resource is owned by
+- **Resource**: Identifies the resource itself (module, path, or tag)
+
+Learn more in the [Namespaces documentation](/api/core/namespaces).
+
+### Registries
+
+The registry system manages game resources through both static and dynamic registries. This includes:
+- **StaticRegistry**: Immutable registries for built-in game resources
+- **DynamicRegistry**: Mutable registries that can be modified at runtime
+- **DynamicRegistries & StaticRegistries**: Record types that hold all registry instances
+
+Learn more in the [Registries documentation](/api/core/registries).
+
+### Coordinates
+
+A comprehensive coordinate system for working with 3D space in Minecraft:
+- **Point**: Interface representing a point in 3D space
+- **Position**: Position with yaw and pitch angles
+- **Direction**: Cardinal directions (UP, DOWN, NORTH, SOUTH, EAST, WEST)
+- **Conversions**: Utilities for converting between coordinate systems
+
+Learn more in the [Coordinates documentation](/api/core/coordinates).
+
+### Blocks
+
+Block-related APIs for working with Minecraft blocks:
+- **BlockManager**: Manages block operations
+- **BlockFace**: Represents the face of a block
+
+Learn more in the [Blocks documentation](/api/core/blocks).
+
+## Package structure
+
+The Core module is organized into the following packages:
+
+```
+com.wirethread.core
+├── namespaces          # Namespace and resource identification
+├── registry            # Registry system for game resources
+├── coordinates         # 3D coordinate system and conversions
+├── block               # Block-related APIs
+├── biome               # Biome types and management
+├── gameplay            # Game mechanics (advancements, recipes, etc.)
+└── exceptions          # Custom exceptions
+```
+
+## Getting started
+
+To use the Core module, include it in your project dependencies:
+
+```xml
+<dependency>
+    <groupId>com.wirethread</groupId>
+    <artifactId>wirethread-core</artifactId>
+    <version>1.0.0</version>
+</dependency>
+```
+
+## Common patterns
+
+### Creating namespaces
+
+```java
+import com.wirethread.core.namespaces.Namespace;
+import com.wirethread.core.namespaces.utils.NamespaceBuilder;
+
+// Direct construction
+Namespace ns1 = new Namespace("myplugin", "items/sword");
+
+// Using builder
+Namespace ns2 = NamespaceBuilder.from("myplugin:items/sword");
+
+// Minecraft namespace
+Namespace ns3 = NamespaceBuilder.fromMinecraft("stone");
+```
+
+### Working with coordinates
+
+```java
+import com.wirethread.core.coordinates.Position;
+import com.wirethread.core.coordinates.Direction;
+
+// Create a position
+Position pos = new Position(10.5, 64.0, 20.5, 0f, 0f);
+
+// Get block coordinates
+int blockX = pos.blockX();
+int blockY = pos.blockY();
+int blockZ = pos.blockZ();
+
+// Move in a direction
+Position newPos = pos.add(Direction.UP.asPointer());
+```
+
+### Using registries
+
+```java
+import com.wirethread.core.registry.records.StaticRegistries;
+import com.wirethread.core.biome.BiomeType;
+import com.wirethread.core.namespaces.Namespace;
+
+// Get a registry entry
+BiomeType biome = staticRegistries.biomeType().get(
+    new Namespace("minecraft", "plains")
+);
+
+// List all entries
+List<BiomeType> allBiomes = staticRegistries.biomeType().values();
+```
+
+## Next steps
+
+- [Explore the Namespace API](/api/core/namespaces)
+- [Learn about Registries](/api/core/registries)
+- [Understand the Coordinate system](/api/core/coordinates)
+- [Work with Blocks](/api/core/blocks)

@@ -1,0 +1,354 @@
+---
+title: Threading architecture
+description: Understanding Wirethread's multi-threaded server architecture
+---
+
+Wirethread uses a multi-threaded architecture to handle different server responsibilities concurrently. The server spawns three specialized threads, each responsible for a specific aspect of server operation.
+
+## Thread hierarchy
+
+All server threads extend the abstract `ServerThread` class:
+
+```java
+package com.wirethread.server.thread;
+
+public abstract class ServerThread extends Thread {
+    public ServerThread(
+        final @NotNull ExceptionManager exceptionManager,
+        final @NotNull String threadName
+    ) {
+        super(threadName);
+        this.setUncaughtExceptionHandler(exceptionManager::handleException);
+    }
+
+    public abstract void shutdown();
+}
+```
+
+Source: `ServerThread.java:14`
+
+### Key features
+
+- **Exception handling**: All threads use a shared `ExceptionManager` as their uncaught exception handler
+- **Named threads**: Each thread has a descriptive name for debugging
+- **Graceful shutdown**: The `shutdown()` method provides a clean way to stop thread execution
+
+## Core server threads
+
+Wirethread runs three specialized threads during server operation:
+
+### 1. TickServerThread
+
+Handles game tick processing and simulation updates.
+
+**Thread name:** `wirethread-tick-worker`
+
+**Constructor:**
+```java
+public TickServerThread(final ExceptionManager exceptionManager) {
+    super(exceptionManager, WIRETHREAD_TICK_SERVER_THREAD);
+}
+```
+
+**Purpose:**
+- Process game logic at regular intervals (ticks)
+- Update entity positions and states
+- Handle world simulation
+- Execute scheduled tasks
+
+**Source:** `TickServerThread.java:5`
+
+**Lifecycle:**
+```java
+@Override
+public void run() {
+    // Tick processing implementation
+}
+
+@Override
+public void shutdown() {
+    // Graceful shutdown implementation
+}
+```
+
+### 2. SocketServerThread
+
+Manages the network layer and incoming client connections using Netty.
+
+**Thread name:** `wirethread-socket-worker`
+
+**Constructor:**
+```java
+public SocketServerThread(
+    final ExceptionManager exceptionManager,
+    final @NotNull ConnectionManager connectionManager,
+    final @NotNull SocketAddress socketAddress
+) {
+    super(exceptionManager, WIRETHREAD_SOCKET_SERVER_THREAD);
+    this.serverSocketAddress = socketAddress;
+    this.connectionManager = connectionManager;
+}
+```
+
+**Parameters:**
+- `exceptionManager` - Handles uncaught exceptions
+- `connectionManager` - Manages active client connections
+- `socketAddress` - The address and port to bind the server to
+
+**Purpose:**
+- Accept incoming client connections
+- Set up Netty event loop groups
+- Initialize client channel handlers
+- Manage network I/O operations
+
+**Source:** `SocketServerThread.java:22`
+
+**Implementation:**
+```java
+@Override
+public void run() {
+    try {
+        LOGGER.info("Listening for incoming connections on {}.", this.serverSocketAddress);
+
+        final ServerBootstrap bootstrap = new ServerBootstrap()
+            .group(inboundGroup, handlerGroup)
+            .channel(NioServerSocketChannel.class)
+            .localAddress(serverSocketAddress)
+            .childOption(ChannelOption.SO_KEEPALIVE, true)
+            .childHandler(new ClientChannelInitializer(connectionManager));
+
+        final ChannelFuture f = bootstrap.bind().sync();
+        f.channel().closeFuture().sync();
+
+    } catch (Exception e) {
+        LOGGER.error("Failed to initialize server.", e);
+    } finally {
+        this.inboundGroup.shutdownGracefully();
+        this.handlerGroup.shutdownGracefully();
+        LOGGER.info("Shutting down event loops.");
+    }
+}
+```
+
+Source: `SocketServerThread.java:46`
+
+**Event loop groups:**
+- `inboundGroup` - Handles accepting new connections (1 thread)
+- `handlerGroup` - Processes client requests (multiple threads with custom factory)
+
+```java
+private final EventLoopGroup inboundGroup = new NioEventLoopGroup(1);
+private final EventLoopGroup handlerGroup = new NioEventLoopGroup(
+    new CustomThreadFactory("client")
+);
+```
+
+Source: `SocketServerThread.java:27`
+
+**Shutdown:**
+```java
+@Override
+public void shutdown() {
+    this.inboundGroup.shutdownGracefully();
+    this.handlerGroup.shutdownGracefully();
+    LOGGER.info("Shutting down the socket server.");
+}
+```
+
+Source: `SocketServerThread.java:77`
+
+### 3. MQServerThread
+
+Manages the message queue for inter-thread communication and asynchronous operations.
+
+**Thread name:** `wirethread-mq-worker`
+
+**Constructor:**
+```java
+public MQServerThread(
+    final @NotNull ExceptionManager exceptionManager,
+    final @NotNull ConnectionManager connectionManager
+) {
+    super(exceptionManager, WIRETHREAD_MQ_WORKER);
+    this.connectionManager = connectionManager;
+}
+```
+
+**Parameters:**
+- `exceptionManager` - Handles uncaught exceptions
+- `connectionManager` - Manages client connections for message routing
+
+**Purpose:**
+- Process queued messages between threads
+- Handle asynchronous operations
+- Coordinate communication between server components
+
+**Source:** `MQServerThread.java:9`
+
+**Implementation:**
+```java
+@Override
+public void run() {
+    LOGGER.info("Starting MQ server.");
+    // Message queue processing implementation
+}
+
+@Override
+public void shutdown() {
+    LOGGER.info("Shutting down MQ server.");
+}
+```
+
+Source: `MQServerThread.java:26`
+
+## Thread startup sequence
+
+When the server starts, threads are initialized and started in this order:
+
+```java
+// 1. Start tick processing
+this.tickWorker = new TickServerThread(exceptionManager);
+this.tickWorker.start();
+
+// 2. Start message queue
+this.mqWorker = new MQServerThread(exceptionManager, connectionManager);
+this.mqWorker.start();
+
+// 3. Start socket server (last to ensure other systems are ready)
+this.socketWorker = new SocketServerThread(exceptionManager, connectionManager, socketAddress);
+this.socketWorker.start();
+```
+
+Source: `Server.java:103`
+
+## Thread shutdown sequence
+
+During server shutdown, threads are stopped in reverse order:
+
+```java
+// 1. Stop accepting new connections
+this.socketWorker.shutdown();
+
+// 2. Stop game processing
+this.tickWorker.shutdown();
+
+// 3. Stop message queue
+this.mqWorker.shutdown();
+```
+
+Source: `Server.java:140`
+
+This ensures:
+- No new clients connect during shutdown
+- All game processing completes before message queue stops
+- All queued messages are processed before full shutdown
+
+## Exception handling
+
+All threads share a common exception handling strategy through `ExceptionManager`:
+
+```java
+this.setUncaughtExceptionHandler(exceptionManager::handleException);
+```
+
+This provides:
+- Centralized exception logging
+- Consistent error handling across threads
+- Prevention of silent thread failures
+
+## Thread communication
+
+Threads communicate through shared components:
+
+- **ConnectionManager**: Shared by socket and MQ threads for client state
+- **Message Queue**: Asynchronous communication between threads
+- **Event System**: Cross-thread event propagation
+
+## Best practices
+
+### Thread-safe operations
+
+When implementing server logic that interacts with threads:
+
+```java
+// Always use thread-safe collections
+private final ConcurrentHashMap<UUID, Player> players = new ConcurrentHashMap<>();
+
+// Use atomic operations for state changes
+private final AtomicInteger tickCount = new AtomicInteger(0);
+```
+
+### Avoid blocking operations
+
+Never perform blocking I/O or long-running operations on server threads:
+
+```java
+// Bad - blocks the tick thread
+@Override
+public void run() {
+    Thread.sleep(1000); // Blocks game tick!
+}
+
+// Good - use async operations
+@Override
+public void run() {
+    CompletableFuture.runAsync(() -> {
+        // Long-running operation
+    });
+}
+```
+
+### Graceful shutdown
+
+Always implement proper cleanup in the `shutdown()` method:
+
+```java
+@Override
+public void shutdown() {
+    // Set stop flag
+    this.running.set(false);
+    
+    // Close resources
+    this.resources.close();
+    
+    // Wait for pending operations
+    this.executor.shutdownGracefully();
+    
+    LOGGER.info("Thread shutdown complete.");
+}
+```
+
+## Performance considerations
+
+### Thread pooling
+
+The `SocketServerThread` uses Netty's thread pooling for efficient client handling:
+
+```java
+private final EventLoopGroup handlerGroup = new NioEventLoopGroup(
+    new CustomThreadFactory("client")
+);
+```
+
+This creates a pool of worker threads that handle multiple clients concurrently.
+
+### CPU utilization
+
+Each core thread runs on a separate CPU core, allowing parallel processing of:
+- Game simulation (tick thread)
+- Network I/O (socket thread)
+- Message processing (MQ thread)
+
+## Monitoring and debugging
+
+Thread names make debugging easier in stack traces and thread dumps:
+
+```
+Thread[wirethread-tick-worker,5,main]
+Thread[wirethread-socket-worker,5,main]
+Thread[wirethread-mq-worker,5,main]
+Thread[client-1,5,main]
+Thread[client-2,5,main]
+```
+
+Use these names to identify which thread is experiencing issues during debugging.

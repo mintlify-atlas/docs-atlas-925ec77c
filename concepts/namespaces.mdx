@@ -1,0 +1,376 @@
+---
+title: Namespaces
+description: Resource identification and organization using the Namespace system
+---
+
+Namespaces are Wirethread's declarative way to identify and organize resources across the game ecosystem. They provide a structured format for uniquely identifying resources while preventing conflicts between plugins, mods, and datapacks.
+
+## What are namespaces?
+
+Namespaces follow the format `domain:path` where:
+
+- **Domain**: Identifies the space which owns the resource (e.g., `minecraft`, `myplugin`)
+- **Path**: Identifies the specific resource, which may be a module, path, or tag (e.g., `blocks/stone`, `items/diamond_sword`)
+
+<Info>
+  This format is based on the [Minecraft protocol identifier specification](https://minecraft.wiki/w/Java_Edition_protocol/Packets#Identifier).
+</Info>
+
+## The Namespace class
+
+The core `Namespace` class provides the implementation:
+
+```java
+package com.wirethread.core.namespaces;
+
+import com.wirethread.core.namespaces.annotations.Patterns;
+import java.util.Objects;
+
+public final class Namespace {
+
+    @Domain
+    private final String domain;
+
+    @Path
+    private final String path;
+
+    public Namespace(@Domain String domain, @Path String path) {
+        if (!assertValidDomain(domain)) {
+            throw new IllegalArgumentException("The provided namespace domain is not valid");
+        }
+
+        if (!assertValidPath(path)) {
+            throw new IllegalArgumentException("The provided namespace path is not valid");
+        }
+
+        this.domain = domain;
+        this.path = path;
+
+        if (this.toString().length() > 255) {
+            throw new IllegalArgumentException("The namespace is valid but is greater than 255 characters.");
+        }
+    }
+
+    @Override
+    public String toString() {
+        return this.domain + ":" + this.path;
+    }
+}
+```
+
+## Creating namespaces
+
+There are multiple ways to create namespace instances:
+
+<CodeGroup>
+
+```java Constructor
+// Basic constructor
+Namespace namespace = new Namespace("minecraft", "blocks/stone");
+
+// With default path
+Namespace defaultNs = new Namespace("myplugin"); // myplugin:default
+```
+
+```java Static factory methods
+// Using of() method (recommended)
+Namespace stone = Namespace.of("minecraft", "blocks/stone");
+
+// With tag support
+Namespace tagged = Namespace.of("minecraft", "blocks", "items/stone");
+```
+
+```java Joining paths
+// Start with base namespace
+Namespace base = Namespace.of("myplugin", "items");
+
+// Add subpaths
+Namespace sword = base.join("sword");  // myplugin:items/sword
+Namespace bow = base.join("bow");      // myplugin:items/bow
+
+// Custom separator
+Namespace custom = base.join("_", "special");  // myplugin:items_special
+```
+
+</CodeGroup>
+
+## Validation rules
+
+Namespaces enforce strict validation rules:
+
+### Domain validation
+
+```java
+public static boolean assertValidDomain(String domain) {
+    return !domain.isBlank() && 
+           Regex.ALLOWED_CHARACTERS_PATTERN.matcher(domain).matches();
+}
+```
+
+<Warning>
+  Domains must not be blank and must match the allowed characters pattern (typically `[a-z0-9_.-]+`).
+</Warning>
+
+### Path validation
+
+```java
+public static boolean assertValidPath(String path) {
+    final boolean areCharsAllowed = 
+        Regex.ALLOWED_CHARACTERS_PATTERN.matcher(path).matches();
+    final boolean isGroupAllowed = 
+        Regex.ALLOWED_GROUPS_PATTERN.matcher(path).matches();
+
+    return !path.isBlank() && (isGroupAllowed || areCharsAllowed);
+}
+```
+
+Paths support:
+- Standard characters: `[a-z0-9_.-]`
+- Forward slashes for hierarchical organization: `/`
+- Must not be blank
+
+### Length constraints
+
+```java
+if (this.toString().length() > 255) {
+    throw new IllegalArgumentException(
+        "The namespace is valid but is greater than 255 characters."
+    );
+}
+```
+
+The complete namespace string must not exceed 255 characters.
+
+## Namespaced interfaces
+
+Wirethread provides interfaces for objects that can be identified by namespaces:
+
+### Namespaced interface
+
+```java
+package com.wirethread.core.namespaces;
+
+/**
+ * Represents an object which is namespaced.
+ */
+public interface Namespaced {
+    Namespace namespace();
+}
+```
+
+### Identifiable interface
+
+```java
+package com.wirethread.core.namespaces;
+
+public interface Identifiable extends Namespaced {
+
+    /**
+     * Retrieves the namespace associated with this resource.
+     */
+    @Patterns.Domain
+    default String domain() {
+        return this.namespace().domain();
+    }
+
+    /**
+     * Return the namespace as a string.
+     */
+    @Patterns.Path
+    default String path() {
+        return this.namespace().path();
+    }
+}
+```
+
+## Usage examples
+
+### In plugins
+
+```java
+import com.wirethread.core.namespaces.Namespace;
+import com.wirethread.plugin.Pluggable;
+
+public class MyPlugin implements Pluggable {
+    private final Namespace namespace = Namespace.of("myplugin", "core");
+    
+    @Override
+    public Namespace getPluginNamespace() {
+        return namespace;
+    }
+    
+    // Create resource namespaces
+    public Namespace getBlockNamespace(String blockName) {
+        return Namespace.of("myplugin", "blocks/" + blockName);
+    }
+}
+```
+
+### In registries
+
+```java
+import com.wirethread.core.registry.repository.Registrable;
+import com.wirethread.core.namespaces.Namespace;
+
+public class CustomBlock implements Registrable {
+    private final Namespace namespace;
+    
+    public CustomBlock(String domain, String name) {
+        this.namespace = Namespace.of(domain, "blocks/" + name);
+    }
+    
+    @Override
+    public Namespace namespace() {
+        return namespace;
+    }
+}
+```
+
+### Hierarchical organization
+
+```java
+// Organize resources hierarchically
+Namespace blocks = Namespace.of("myplugin", "blocks");
+Namespace ores = blocks.join("ores");
+Namespace copperOre = ores.join("copper");  // myplugin:blocks/ores/copper
+
+// Items
+Namespace items = Namespace.of("myplugin", "items");
+Namespace tools = items.join("tools");
+Namespace pickaxe = tools.join("diamond_pickaxe");  // myplugin:items/tools/diamond_pickaxe
+
+// Entities
+Namespace entities = Namespace.of("myplugin", "entities");
+Namespace hostile = entities.join("hostile");
+Namespace boss = hostile.join("dragon");  // myplugin:entities/hostile/dragon
+```
+
+## Equality and hashing
+
+Namespaces implement proper equality and hash code:
+
+```java
+@Override
+public boolean equals(Object o) {
+    if (this == o) return true;
+    if (!(o instanceof Namespace namespace)) return false;
+    return Objects.equals(domain, namespace.domain) && 
+           Objects.equals(path, namespace.path);
+}
+
+@Override
+public int hashCode() {
+    return Objects.hash(domain, path);
+}
+```
+
+This allows namespaces to be used as keys in maps and sets:
+
+```java
+Map<Namespace, Block> blockRegistry = new HashMap<>();
+Set<Namespace> loadedResources = new HashSet<>();
+
+Namespace stoneNs = Namespace.of("minecraft", "blocks/stone");
+blockRegistry.put(stoneNs, stoneBlock);
+loadedResources.add(stoneNs);
+```
+
+## Best practices
+
+<CardGroup cols={2}>
+  <Card title="Use descriptive domains" icon="tag">
+    Always use your plugin or mod name as the domain: `myplugin:resource` not `mp:resource`
+  </Card>
+  
+  <Card title="Organize with paths" icon="folder-tree">
+    Use forward slashes to create logical hierarchies: `items/tools/sword` instead of `items_tools_sword`
+  </Card>
+  
+  <Card title="Keep it lowercase" icon="text-size">
+    Use lowercase letters for consistency and to avoid validation errors
+  </Card>
+  
+  <Card title="Avoid conflicts" icon="shield-halved">
+    Never use `minecraft:` domain for custom resources - it's reserved for vanilla content
+  </Card>
+</CardGroup>
+
+## Common patterns
+
+### Resource categories
+
+```java
+public class ResourceNamespaces {
+    private final String domain;
+    
+    public ResourceNamespaces(String domain) {
+        this.domain = domain;
+    }
+    
+    public Namespace block(String name) {
+        return Namespace.of(domain, "blocks/" + name);
+    }
+    
+    public Namespace item(String name) {
+        return Namespace.of(domain, "items/" + name);
+    }
+    
+    public Namespace entity(String name) {
+        return Namespace.of(domain, "entities/" + name);
+    }
+    
+    public Namespace recipe(String name) {
+        return Namespace.of(domain, "recipes/" + name);
+    }
+}
+
+// Usage
+ResourceNamespaces ns = new ResourceNamespaces("myplugin");
+Namespace diamondOre = ns.block("diamond_ore");
+Namespace magicSword = ns.item("magic_sword");
+```
+
+### Namespace builder
+
+Wirethread includes a builder pattern for complex namespaces:
+
+```java
+import com.wirethread.core.namespaces.utils.NamespaceBuilder;
+
+Namespace namespace = new NamespaceBuilder()
+    .domain("myplugin")
+    .path("blocks/ores/copper")
+    .build();
+```
+
+## Integration with registries
+
+Namespaces are the foundation of the registry system. All registrable objects must provide a namespace:
+
+```java
+public interface Registrable extends Namespaced {
+    // Automatically provides namespace() method
+}
+
+// In registry implementations
+public interface Registry<R extends Registrable> {
+    R get(@NotNull Namespace namespace);  // Lookup by namespace
+    R register(final @NotNull R entry);   // Entry provides its own namespace
+}
+```
+
+See [Registries](/concepts/registries) for more information on resource registration.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Plugin system" icon="puzzle-piece" href="/concepts/plugin-system">
+    Learn how plugins use namespaces for identification
+  </Card>
+  <Card title="Registries" icon="database" href="/concepts/registries">
+    Understand namespace-based resource registration
+  </Card>
+  <Card title="Architecture" icon="sitemap" href="/concepts/architecture">
+    Explore how namespaces fit into the overall design
+  </Card>
+</CardGroup>

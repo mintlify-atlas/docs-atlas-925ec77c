@@ -1,0 +1,433 @@
+---
+title: Registries
+description: Registry system for managing game resources
+---
+
+The Wirethread registry system provides a structured way to manage game resources like biomes, block types, items, and other game content. It supports both static (immutable) and dynamic (mutable) registries.
+
+## Overview
+
+Registries are the core mechanism for managing game resources in Wirethread. They provide:
+
+- **Type-safe resource management**: Strongly typed registries for different resource types
+- **Namespace-based lookups**: Find resources by their namespace identifier
+- **ID-based access**: Retrieve resources by numeric ID
+- **Immutability control**: Choose between static (read-only) and dynamic (modifiable) registries
+
+## Registry interface
+
+The base `Registry<R>` interface defines common operations for all registry types.
+
+```java
+public interface Registry<R extends Registrable> {
+    R register(R entry);
+    List<R> register(List<? extends R> entries);
+    R unregister(Namespace namespace);
+    R get(Namespace namespace);
+    R get(int id);
+    List<R> values();
+}
+```
+
+### Type parameter
+
+<ParamField path="R" type="extends Registrable" required>
+  The type of resource managed by this registry. Must implement `Registrable` (which extends `Namespaced`).
+</ParamField>
+
+### Methods
+
+#### register()
+
+Registers a new entry in the registry, overriding any existing entry with the same namespace.
+
+<ParamField path="entry" type="R" required>
+  The entry to register. Must extend `Registrable`.
+</ParamField>
+
+```java
+BiomeType customBiome = new CustomBiomeType("myplugin", "desert_variant");
+BiomeType registered = registry.register(customBiome);
+```
+
+<ResponseField name="return" type="R | null">
+  The registered entry, or `null` if registration failed.
+</ResponseField>
+
+**Throws**: `UnsupportedOperationException` if the registry doesn't support registration (e.g., `StaticRegistry`).
+
+#### register(List)
+
+Registers multiple entries at once.
+
+<ParamField path="entries" type="List<? extends R>" required>
+  A list of entries to register.
+</ParamField>
+
+```java
+List<BiomeType> biomes = List.of(biome1, biome2, biome3);
+List<BiomeType> registered = registry.register(biomes);
+```
+
+<ResponseField name="return" type="List<R> | null">
+  A list of registered entries.
+</ResponseField>
+
+#### unregister()
+
+Removes an entry from the registry by its namespace.
+
+<ParamField path="namespace" type="Namespace" required>
+  The namespace of the entry to remove.
+</ParamField>
+
+```java
+Namespace ns = new Namespace("myplugin", "custom_biome");
+BiomeType removed = registry.unregister(ns);
+```
+
+<ResponseField name="return" type="R | null">
+  The removed entry, or `null` if no entry was found.
+</ResponseField>
+
+**Throws**: `UnsupportedOperationException` if the registry doesn't support unregistration.
+
+#### get(Namespace)
+
+Retrieves a registry entry by its namespace.
+
+<ParamField path="namespace" type="Namespace" required>
+  The namespace identifier for the resource.
+</ParamField>
+
+```java
+Namespace ns = NamespaceBuilder.from("minecraft:plains");
+BiomeType plains = registry.get(ns);
+```
+
+<ResponseField name="return" type="R | null">
+  The registry entry, or `null` if not found.
+</ResponseField>
+
+#### get(int)
+
+Retrieves a registry entry by its numeric ID.
+
+<ParamField path="id" type="int" required>
+  The numeric ID of the resource.
+</ParamField>
+
+```java
+BiomeType biome = registry.get(42);
+```
+
+<ResponseField name="return" type="R | null">
+  The registry entry, or `null` if not found.
+</ResponseField>
+
+#### values()
+
+Retrieves all entries in the registry.
+
+```java
+List<BiomeType> allBiomes = registry.values();
+for (BiomeType biome : allBiomes) {
+    System.out.println(biome.namespace());
+}
+```
+
+<ResponseField name="return" type="List<R>">
+  An immutable list of all registry entries.
+</ResponseField>
+
+## StaticRegistry
+
+`StaticRegistry` is an immutable registry that cannot be modified after initialization. It's used for built-in game resources.
+
+### Constructor
+
+<ParamField path="id" type="String" required>
+  The resource location identifier for this registry.
+</ParamField>
+
+<ParamField path="resourceManager" type="ResourceManager" required>
+  The resource manager used to load registry data.
+</ParamField>
+
+```java
+StaticRegistry<BiomeType> biomeRegistry = new StaticRegistry<>(
+    "minecraft:worldgen/biome",
+    resourceManager
+);
+```
+
+### Behavior
+
+- **register()**: Throws `UnsupportedOperationException`
+- **unregister()**: Throws `UnsupportedOperationException`
+- **get()**: Returns entries loaded from resources
+- **values()**: Returns all loaded entries
+
+### Example
+
+```java
+import com.wirethread.core.registry.repository.StaticRegistry;
+import com.wirethread.core.namespaces.Namespace;
+import com.wirethread.core.biome.BiomeType;
+
+StaticRegistry<BiomeType> biomes = new StaticRegistry<>(
+    "minecraft:worldgen/biome",
+    resourceManager
+);
+
+// Get built-in biomes
+BiomeType plains = biomes.get(new Namespace("minecraft", "plains"));
+BiomeType desert = biomes.get(new Namespace("minecraft", "desert"));
+
+// List all biomes
+List<BiomeType> allBiomes = biomes.values();
+System.out.println("Total biomes: " + allBiomes.size());
+
+// This will throw UnsupportedOperationException
+try {
+    biomes.register(customBiome);
+} catch (UnsupportedOperationException e) {
+    System.err.println("Cannot modify static registry");
+}
+```
+
+## DynamicRegistry
+
+`DynamicRegistry` is a mutable registry that allows adding and removing entries at runtime.
+
+### Constructor
+
+```java
+public abstract class DynamicRegistry<T extends Registrable> implements Registry<T> {
+    public DynamicRegistry() {
+        // Creates a new registry with an immutable namespace
+    }
+}
+```
+
+Note: `DynamicRegistry` is abstract. You'll typically receive instances from `DynamicRegistries`.
+
+### Behavior
+
+- **register()**: Adds or updates entries in the registry
+- **unregister()**: Removes entries from the registry
+- **get()**: Returns registered entries
+- **values()**: Returns all registered entries
+
+### Example
+
+```java
+import com.wirethread.core.registry.repository.DynamicRegistry;
+import com.wirethread.core.namespaces.Namespace;
+import com.wirethread.core.biome.BiomeType;
+
+DynamicRegistry<BiomeType> biomes = dynamicRegistries.biomeType();
+
+// Register a custom biome
+BiomeType customBiome = new CustomBiomeType("myplugin", "volcanic");
+biomes.register(customBiome);
+
+// Retrieve it
+BiomeType retrieved = biomes.get(new Namespace("myplugin", "volcanic"));
+
+// Unregister it
+biomes.unregister(new Namespace("myplugin", "volcanic"));
+```
+
+## Registry collections
+
+### StaticRegistries
+
+`StaticRegistries` is a record that holds all static registries managed by the server.
+
+```java
+public record StaticRegistries(
+    StaticRegistry<BiomeType> biomeType
+    // Additional registries will be added here
+) {}
+```
+
+<ParamField path="biomeType" type="StaticRegistry<BiomeType>" required>
+  Registry for biome types.
+</ParamField>
+
+#### Usage
+
+```java
+import com.wirethread.core.registry.records.StaticRegistries;
+import com.wirethread.core.biome.BiomeType;
+import com.wirethread.core.namespaces.Namespace;
+
+// Assuming you have access to StaticRegistries instance
+StaticRegistries registries = server.getStaticRegistries();
+
+// Access biome registry
+StaticRegistry<BiomeType> biomes = registries.biomeType();
+
+// Get a specific biome
+BiomeType plains = biomes.get(
+    NamespaceBuilder.fromMinecraft("plains")
+);
+```
+
+### DynamicRegistries
+
+`DynamicRegistries` is a record that holds all dynamic registries managed by the server.
+
+```java
+public record DynamicRegistries(
+    DynamicRegistry<BiomeType> biomeType
+    // Additional registries will be added here
+) {}
+```
+
+<ParamField path="biomeType" type="DynamicRegistry<BiomeType>" required>
+  Registry for biome types.
+</ParamField>
+
+#### Usage
+
+```java
+import com.wirethread.core.registry.records.DynamicRegistries;
+import com.wirethread.core.biome.BiomeType;
+
+// Assuming you have access to DynamicRegistries instance
+DynamicRegistries registries = server.getDynamicRegistries();
+
+// Access biome registry
+DynamicRegistry<BiomeType> biomes = registries.biomeType();
+
+// Register a custom biome
+BiomeType volcanic = new CustomBiomeType("myplugin", "volcanic");
+biomes.register(volcanic);
+
+// Get all biomes (including custom ones)
+List<BiomeType> allBiomes = biomes.values();
+```
+
+## Registrable interface
+
+Resources that can be stored in registries must implement the `Registrable` interface.
+
+```java
+public interface Registrable extends Namespaced {
+    // Inherits namespace() from Namespaced
+}
+```
+
+This interface ensures that all registry entries can be identified by a namespace.
+
+### Implementing Registrable
+
+```java
+import com.wirethread.core.registry.repository.Registrable;
+import com.wirethread.core.namespaces.Namespace;
+
+public class CustomBiomeType implements Registrable {
+    private final Namespace namespace;
+    private final String displayName;
+    private final double temperature;
+    
+    public CustomBiomeType(String domain, String path, String displayName, double temperature) {
+        this.namespace = new Namespace(domain, path);
+        this.displayName = displayName;
+        this.temperature = temperature;
+    }
+    
+    @Override
+    public Namespace namespace() {
+        return namespace;
+    }
+    
+    public String getDisplayName() {
+        return displayName;
+    }
+    
+    public double getTemperature() {
+        return temperature;
+    }
+}
+```
+
+## Complete example
+
+Here's a complete example showing how to work with both static and dynamic registries:
+
+```java
+import com.wirethread.core.registry.records.StaticRegistries;
+import com.wirethread.core.registry.records.DynamicRegistries;
+import com.wirethread.core.registry.repository.Registrable;
+import com.wirethread.core.namespaces.Namespace;
+import com.wirethread.core.namespaces.utils.NamespaceBuilder;
+import com.wirethread.core.biome.BiomeType;
+
+public class BiomeManager {
+    private final StaticRegistries staticRegistries;
+    private final DynamicRegistries dynamicRegistries;
+    
+    public BiomeManager(StaticRegistries staticRegistries, DynamicRegistries dynamicRegistries) {
+        this.staticRegistries = staticRegistries;
+        this.dynamicRegistries = dynamicRegistries;
+    }
+    
+    public void initialize() {
+        // List all built-in biomes
+        System.out.println("Built-in biomes:");
+        for (BiomeType biome : staticRegistries.biomeType().values()) {
+            System.out.println("  - " + biome.namespace());
+        }
+        
+        // Register custom biomes
+        registerCustomBiomes();
+        
+        // List all biomes (including custom)
+        System.out.println("\nAll biomes (with custom):");
+        for (BiomeType biome : dynamicRegistries.biomeType().values()) {
+            System.out.println("  - " + biome.namespace());
+        }
+    }
+    
+    private void registerCustomBiomes() {
+        // Create and register custom biomes
+        BiomeType volcanic = new CustomBiomeType(
+            "myplugin", "volcanic", "Volcanic Wasteland", 2.0
+        );
+        BiomeType frozen = new CustomBiomeType(
+            "myplugin", "frozen_forest", "Frozen Forest", -0.5
+        );
+        
+        dynamicRegistries.biomeType().register(volcanic);
+        dynamicRegistries.biomeType().register(frozen);
+        
+        System.out.println("Registered custom biomes");
+    }
+    
+    public BiomeType getBiome(String namespace) {
+        Namespace ns = NamespaceBuilder.from(namespace);
+        
+        // Try dynamic registry first (includes custom biomes)
+        BiomeType biome = dynamicRegistries.biomeType().get(ns);
+        
+        // Fall back to static registry if not found
+        if (biome == null) {
+            biome = staticRegistries.biomeType().get(ns);
+        }
+        
+        return biome;
+    }
+}
+```
+
+## Best practices
+
+1. **Use StaticRegistry for built-in resources**: Game resources that shouldn't be modified at runtime
+2. **Use DynamicRegistry for custom content**: Player-created or plugin-added resources
+3. **Always check for null**: Registry lookups may return `null` if the resource doesn't exist
+4. **Use namespaces consistently**: Follow the `domain:path` format for all identifiers
+5. **Handle exceptions**: Be prepared for `UnsupportedOperationException` when using static registries
+6. **Validate before registering**: Ensure entries have valid namespaces before registration

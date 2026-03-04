@@ -1,0 +1,346 @@
+---
+title: Packets
+description: Packet interface, bounds, and packet types in the Wirethread network module
+---
+
+Packets are the fundamental units of communication between client and server. The Wirethread network module provides a type-safe packet system with automatic serialization.
+
+## Packet interface
+
+All packets implement the `Packet` interface, which defines the core contract for network messages.
+
+### Interface definition
+
+```java
+package com.wirethread.network.packet;
+
+public interface Packet {
+    @NotNull
+    PacketBound getBound();
+
+    @NotNull
+    ConnectionState getConnectionState();
+
+    default boolean isTerminal() {
+        return false;
+    }
+}
+```
+
+<ParamField path="getBound" type="PacketBound">
+  Returns the bound of this packet (CLIENT_BOUND or SERVER_BOUND)
+</ParamField>
+
+<ParamField path="getConnectionState" type="ConnectionState">
+  Returns the connection state this packet belongs to
+</ParamField>
+
+<ParamField path="isTerminal" type="boolean" default="false">
+  Returns true if this is the last packet of the connection
+</ParamField>
+
+## Packet bounds
+
+The `PacketBound` enum identifies which side of the connection handles a packet.
+
+### PacketBound enum
+
+```java
+public enum PacketBound {
+    CLIENT_BOUND,  // Server → Client
+    SERVER_BOUND;  // Client → Server
+
+    public PacketBound getOpposite() {
+        return switch (this) {
+            case CLIENT_BOUND -> SERVER_BOUND;
+            case SERVER_BOUND -> CLIENT_BOUND;
+        };
+    }
+}
+```
+
+<ResponseField name="CLIENT_BOUND">
+  The client receives the server response
+</ResponseField>
+
+<ResponseField name="SERVER_BOUND">
+  The server receives the client request
+</ResponseField>
+
+### Methods
+
+<ResponseField name="getBound" type="int">
+  Returns the ordinal + 1 as an integer identifier
+</ResponseField>
+
+<ResponseField name="getOpposite" type="PacketBound">
+  Returns the opposite packet bound
+</ResponseField>
+
+## Packet format
+
+The `PacketFormat` record represents the header of a network packet.
+
+```java
+public record PacketFormat(int packetSize, int packetId) implements Packet {
+    public static final Type<PacketFormat> SERIALIZER = new Type<>() {
+        @Override
+        public PacketFormat read(@NotNull ByteBuf buffer) throws IOException {
+            return new PacketFormat(
+                Numbers.VAR_INT.read(buffer),
+                Numbers.VAR_INT.read(buffer)
+            );
+        }
+    };
+}
+```
+
+<ParamField path="packetSize" type="int">
+  The size of the packet in bytes
+</ParamField>
+
+<ParamField path="packetId" type="int">
+  The unique identifier for this packet type
+</ParamField>
+
+<Info>
+  Packet format follows the [Minecraft Java Edition protocol](https://minecraft.wiki/w/Java_Edition_protocol/Packets#Packet_format) specification.
+</Info>
+
+## Server-bound packets
+
+Packets sent from client to server implement `ServerBoundPacket`.
+
+### Base interface
+
+```java
+public interface ServerBoundPacket extends Packet {
+    default @NotNull PacketBound getBound() {
+        return PacketBound.SERVER_BOUND;
+    }
+}
+```
+
+### State-specific interfaces
+
+<Accordion title="ServerBoundPacket.Handshaking">
+  ```java
+  interface Handshaking extends ServerBoundPacket {
+      default @NotNull ConnectionState getConnectionState() {
+          return ConnectionState.HANDSHAKE;
+      }
+  }
+  ```
+</Accordion>
+
+<Accordion title="ServerBoundPacket.Status">
+  ```java
+  interface Status extends ServerBoundPacket {
+      default @NotNull ConnectionState getConnectionState() {
+          return ConnectionState.STATUS;
+      }
+  }
+  ```
+</Accordion>
+
+<Accordion title="ServerBoundPacket.Login">
+  ```java
+  interface Login extends ServerBoundPacket {
+      default @NotNull ConnectionState getConnectionState() {
+          return ConnectionState.LOGIN;
+      }
+  }
+  ```
+</Accordion>
+
+<Accordion title="ServerBoundPacket.Configuration">
+  ```java
+  interface Configuration extends ServerBoundPacket {
+      default @NotNull ConnectionState getConnectionState() {
+          return ConnectionState.CONFIGURATION;
+      }
+  }
+  ```
+</Accordion>
+
+<Accordion title="ServerBoundPacket.Play">
+  ```java
+  interface Play extends ServerBoundPacket {
+      default @NotNull ConnectionState getConnectionState() {
+          return ConnectionState.PLAY;
+      }
+  }
+  ```
+</Accordion>
+
+### Example: HandshakePacket
+
+```java
+public record HandshakePacket(
+    @NotNull Integer protocolVersion,
+    @NotNull String serverAddress,
+    @NotNull Integer serverPort,
+    @NotNull ConnectionIntention intention
+) implements ServerBoundPacket.Handshaking {
+    
+    public static final Type<HandshakePacket> SERIALIZER = new Type<>() {
+        @Override
+        public HandshakePacket read(@NotNull ByteBuf buffer) throws IOException {
+            return new HandshakePacket(
+                Numbers.VAR_INT.read(buffer),
+                Primitives.STRING.read(buffer),
+                Numbers.UNSIGNED_SHORT.read(buffer),
+                Primitives.INTENTION_TYPE.read(buffer)
+            );
+        }
+    };
+}
+```
+
+### Example: LoginStartPacket
+
+```java
+public record LoginStartPacket(
+    @NotNull String playerName,
+    @NotNull UUID playerId
+) implements ServerBoundPacket.Login {
+    
+    public static final Type<LoginStartPacket> SERIALIZER = new Type<>() {
+        @Override
+        public LoginStartPacket read(@NotNull ByteBuf buffer) throws IOException {
+            return new LoginStartPacket(
+                Primitives.STRING.read(buffer),
+                Primitives.UUID_TYPE.read(buffer)
+            );
+        }
+    };
+}
+```
+
+## Client-bound packets
+
+Packets sent from server to client implement `ClientBoundPacket`.
+
+### Base interface
+
+```java
+public interface ClientBoundPacket extends Packet {
+    default @NotNull PacketBound getBound() {
+        return PacketBound.CLIENT_BOUND;
+    }
+}
+```
+
+### State-specific interfaces
+
+<Accordion title="ClientBoundPacket.Status">
+  ```java
+  interface Status extends ClientBoundPacket {
+      default @NotNull ConnectionState getConnectionState() {
+          return ConnectionState.STATUS;
+      }
+  }
+  ```
+</Accordion>
+
+<Accordion title="ClientBoundPacket.Login">
+  ```java
+  interface Login extends ClientBoundPacket {
+      default @NotNull ConnectionState getConnectionState() {
+          return ConnectionState.LOGIN;
+      }
+  }
+  ```
+</Accordion>
+
+<Accordion title="ClientBoundPacket.Configuration">
+  ```java
+  interface Configuration extends ClientBoundPacket {
+      default @NotNull ConnectionState getConnectionState() {
+          return ConnectionState.CONFIGURATION;
+      }
+  }
+  ```
+</Accordion>
+
+<Accordion title="ClientBoundPacket.Play">
+  ```java
+  interface Play extends ClientBoundPacket {
+      default @NotNull ConnectionState getConnectionState() {
+          return ConnectionState.PLAY;
+      }
+  }
+  ```
+</Accordion>
+
+### Example: StatusResponsePacket
+
+```java
+public record StatusResponsePacket(
+    @NotNull String jsonResponse
+) implements ClientBoundPacket.Status {
+    
+    public static Type<StatusResponsePacket> SERIALIZER = TypeTemplate.template(
+        Primitives.STRING,
+        StatusResponsePacket::jsonResponse,
+        StatusResponsePacket::new
+    );
+}
+```
+
+### Example: LoginSuccessPacket
+
+```java
+public record LoginSuccessPacket(
+    @NotNull GameProfile profile
+) implements ClientBoundPacket.Login {
+    
+    public static final Type<LoginSuccessPacket> SERIALIZER = TypeTemplate.template(
+        GameProfile.SERIALIZER,
+        LoginSuccessPacket::profile,
+        LoginSuccessPacket::new
+    );
+}
+```
+
+## Creating custom packets
+
+To create a custom packet:
+
+<Steps>
+  <Step title="Define the record">
+    Create a record implementing the appropriate packet interface
+    ```java
+    public record MyCustomPacket(
+        String data
+    ) implements ServerBoundPacket.Play {
+    }
+    ```
+  </Step>
+  
+  <Step title="Add serializer">
+    Define a static `SERIALIZER` field with read/write logic
+    ```java
+    public static final Type<MyCustomPacket> SERIALIZER = new Type<>() {
+        @Override
+        public MyCustomPacket read(@NotNull ByteBuf buffer) throws IOException {
+            return new MyCustomPacket(Primitives.STRING.read(buffer));
+        }
+        
+        @Override
+        public void write(@NotNull ByteBuf buffer, MyCustomPacket value) throws IOException {
+            Primitives.STRING.write(buffer, value.data());
+        }
+    };
+    ```
+  </Step>
+  
+  <Step title="Register the packet">
+    Add the packet to the appropriate packet registry
+  </Step>
+</Steps>
+
+## See also
+
+- [Connections](/api/network/connections) - Connection states and management
+- [Codecs](/api/network/codecs) - Packet encoding and decoding

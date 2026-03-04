@@ -1,0 +1,113 @@
+---
+title: Introduction
+description: Fast and simple-to-use Minecraft server framework built from scratch
+---
+
+<Note>
+  Wirethread is a work in progress and is not yet intended for use in production.
+</Note>
+
+## What is Wirethread?
+
+Wirethread is an open source Minecraft server framework that provides a complete and easy-to-use API for building custom Minecraft servers. Built from the ground up, Wirethread offers a modern alternative to traditional server implementations with a focus on modularity, performance, and developer experience.
+
+Unlike Spigot, Paper, or other servers, Wirethread is **not compatible** with existing server plugins. Instead, it provides a fresh architectural approach designed to make server development straightforward and powerful.
+
+## Key features
+
+Wirethread breaks with current development paradigms to provide a more modern way to create Minecraft servers:
+
+<CardGroup cols={2}>
+  <Card title="Network adapters" icon="network-wired">
+    Built on Netty for high-performance network communication with support for multiple protocol versions
+  </Card>
+  
+  <Card title="Dependency injection" icon="plug">
+    Modern dependency injection system for clean, testable code architecture
+  </Card>
+  
+  <Card title="Plugin system" icon="puzzle-piece">
+    Flexible plugin injection system for extending server functionality
+  </Card>
+  
+  <Card title="Version support" icon="code-branch">
+    Native backward compatibility between game versions without third-party plugins
+  </Card>
+  
+  <Card title="Multi-world" icon="globe">
+    Simultaneous multi-world and multi-dimension support built into the core
+  </Card>
+  
+  <Card title="Modular design" icon="cubes">
+    Extensible architecture with logical units that can be customized or replaced
+  </Card>
+</CardGroup>
+
+## Why choose Wirethread?
+
+Wirethread aims to be a tool for developing cross-platform servers that support all game versions with:
+
+- **Modular and extensible** architecture that grows with your needs
+- **Complete API** covering all server functionality
+- **Easy to use** with modern Java patterns and clear abstractions
+- **Cross-edition support** for both Java and Bedrock editions
+- **Native features** that traditionally require third-party plugins
+
+The framework equips developers with modern and powerful tools that allow them to program more compact and efficient logic units.
+
+## Get started
+
+<CardGroup cols={2}>
+  <Card
+    title="Quickstart"
+    icon="rocket"
+    href="/quickstart"
+  >
+    Get a Wirethread server running in minutes
+  </Card>
+  
+  <Card
+    title="Installation"
+    icon="download"
+    href="/installation"
+  >
+    Detailed setup instructions for Gradle projects
+  </Card>
+  
+  <Card
+    title="API reference"
+    icon="code"
+    href="/api/core/overview"
+  >
+    Explore the complete Wirethread API
+  </Card>
+  
+  <Card
+    title="Guides"
+    icon="book"
+    href="/guides/server-setup"
+  >
+    Learn how to build with Wirethread
+  </Card>
+</CardGroup>
+
+## Architecture overview
+
+Wirethread is organized into modular components:
+
+- **wirethread-core** - Core abstractions, registries, coordinates, and game logic
+- **wirethread-network** - Network protocol implementation and packet handling
+- **wirethread-plugin** - Plugin system for extending server functionality
+- **wirethread-server** - Main server implementation with thread management
+
+<Tip>
+  Each module can be used independently or extended to create custom server implementations.
+</Tip>
+
+## Community and support
+
+Wirethread is an open source project licensed under GPL-3.0. We welcome contributions from the community to help make Minecraft server development more accessible and powerful.
+
+<Warning>
+  The Wirethread API is currently **unstable** and not fully documented. Use with caution and expect breaking changes.
+</Warning>

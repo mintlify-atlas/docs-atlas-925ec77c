@@ -1,0 +1,388 @@
+---
+title: Namespaces
+description: Resource identification and organization using namespaces
+---
+
+Namespaces provide a declarative way to identify and organize resources across the Wirethread ecosystem. They follow the Minecraft identifier format and are used throughout the framework for resource management.
+
+## Overview
+
+Namespaces are declared in the form `domain:resource` where:
+- **Domain**: Identifies the space which a resource is owned by (e.g., `minecraft`, `wirethread`, `myplugin`)
+- **Resource**: Identifies the resource itself, which may be a module, path, or tag
+
+Namespaces are critical for identifying resources across multiple systems like mods, plugins, and datapacks. Each namespace must be unique within its environment.
+
+## Namespace class
+
+### Constructor
+
+<ParamField path="domain" type="String" required>
+  The domain/namespace identifier. Must contain only allowed characters (lowercase letters, numbers, underscores, hyphens, dots).
+</ParamField>
+
+<ParamField path="tag" type="String">
+  Optional tag for the namespace resource.
+</ParamField>
+
+<ParamField path="path" type="String" required>
+  The resource path. Can include forward slashes for hierarchical organization.
+</ParamField>
+
+### Creating namespaces
+
+```java
+import com.wirethread.core.namespaces.Namespace;
+
+// Basic namespace with domain and path
+Namespace ns1 = new Namespace("myplugin", "items/sword");
+
+// Namespace with tag
+Namespace ns2 = new Namespace("minecraft", "blocks", "stone");
+
+// Namespace with just a domain (uses "default" path)
+Namespace ns3 = new Namespace("wirethread");
+```
+
+### Static factory methods
+
+<ResponseField name="of" type="Namespace">
+  Creates a namespace from domain and path components.
+
+  ```java
+  Namespace ns = Namespace.of("minecraft", "stone");
+  ```
+</ResponseField>
+
+<ResponseField name="of" type="Namespace">
+  Creates a namespace from domain, tag, and path components.
+
+  ```java
+  Namespace ns = Namespace.of("minecraft", "blocks", "stone");
+  ```
+</ResponseField>
+
+## Instance methods
+
+### domain()
+
+Retrieves the domain portion of the namespace.
+
+```java
+Namespace ns = new Namespace("minecraft", "stone");
+String domain = ns.domain(); // Returns "minecraft"
+```
+
+<ResponseField name="domain" type="String">
+  The namespace domain.
+</ResponseField>
+
+### path()
+
+Retrieves the path portion of the namespace.
+
+```java
+Namespace ns = new Namespace("minecraft", "items/sword");
+String path = ns.path(); // Returns "items/sword"
+```
+
+<ResponseField name="path" type="String">
+  The namespace path.
+</ResponseField>
+
+### join()
+
+Creates a new namespace by joining a path segment to the current namespace.
+
+<ParamField path="separator" type="String">
+  Path separator (defaults to "/" if not specified).
+</ParamField>
+
+<ParamField path="path" type="String" required>
+  The path segment to append.
+</ParamField>
+
+```java
+Namespace base = new Namespace("myplugin", "items");
+Namespace sword = base.join("sword"); // myplugin:items/sword
+Namespace custom = base.join(".", "weapon"); // myplugin:items.weapon
+```
+
+<ResponseField name="return" type="Namespace">
+  A new namespace with the joined path.
+</ResponseField>
+
+### toString()
+
+Returns the string representation of the namespace in `domain:path` format.
+
+```java
+Namespace ns = new Namespace("minecraft", "stone");
+String str = ns.toString(); // Returns "minecraft:stone"
+```
+
+<ResponseField name="return" type="String">
+  The namespace as a string in `domain:path` format.
+</ResponseField>
+
+## Validation methods
+
+### assertValidDomain()
+
+Validates whether a string is a valid namespace domain.
+
+<ParamField path="domain" type="String" required>
+  The domain string to validate.
+</ParamField>
+
+```java
+boolean valid = Namespace.assertValidDomain("minecraft"); // true
+boolean invalid = Namespace.assertValidDomain("My-Plugin"); // false (uppercase)
+```
+
+<ResponseField name="return" type="boolean">
+  `true` if the domain is valid, `false` otherwise.
+</ResponseField>
+
+### assertValidPath()
+
+Validates whether a string is a valid namespace path.
+
+<ParamField path="path" type="String" required>
+  The path string to validate.
+</ParamField>
+
+```java
+boolean valid = Namespace.assertValidPath("items/sword"); // true
+boolean invalid = Namespace.assertValidPath(""); // false (blank)
+```
+
+<ResponseField name="return" type="boolean">
+  `true` if the path is valid, `false` otherwise.
+</ResponseField>
+
+### assertValidTag()
+
+Validates whether a string is a valid namespace tag.
+
+<ParamField path="tag" type="String" required>
+  The tag string to validate.
+</ParamField>
+
+```java
+boolean valid = Namespace.assertValidTag("blocks"); // true
+```
+
+<ResponseField name="return" type="boolean">
+  `true` if the tag is valid, `false` otherwise.
+</ResponseField>
+
+## NamespaceBuilder utility
+
+The `NamespaceBuilder` class provides convenient methods for creating namespaces.
+
+### from()
+
+Parses a full namespace string in `domain:path` format.
+
+<ParamField path="namespace" type="String" required>
+  A full namespace string (e.g., "minecraft:stone").
+</ParamField>
+
+```java
+import com.wirethread.core.namespaces.utils.NamespaceBuilder;
+
+Namespace ns = NamespaceBuilder.from("minecraft:stone");
+```
+
+<ResponseField name="return" type="Namespace">
+  A new namespace instance.
+</ResponseField>
+
+### fromMinecraft()
+
+Creates a namespace in the Minecraft domain.
+
+<ParamField path="path" type="String" required>
+  The resource path.
+</ParamField>
+
+```java
+Namespace stone = NamespaceBuilder.fromMinecraft("stone");
+// Equivalent to: new Namespace("minecraft", "stone")
+```
+
+<ResponseField name="return" type="Namespace">
+  A namespace with domain "minecraft".
+</ResponseField>
+
+### fromWirethread()
+
+Creates a namespace in the Wirethread domain.
+
+<ParamField path="path" type="String" required>
+  The resource path.
+</ParamField>
+
+```java
+Namespace custom = NamespaceBuilder.fromWirethread("custom_block");
+// Equivalent to: new Namespace("wirethread", "custom_block")
+```
+
+<ResponseField name="return" type="Namespace">
+  A namespace with domain "wirethread".
+</ResponseField>
+
+## Interfaces
+
+### Namespaced
+
+Represents an object that has an associated namespace.
+
+```java
+public interface Namespaced {
+    Namespace namespace();
+}
+```
+
+Implement this interface on classes that need namespace identification:
+
+```java
+public class MyResource implements Namespaced {
+    private final Namespace namespace;
+    
+    public MyResource(String domain, String path) {
+        this.namespace = new Namespace(domain, path);
+    }
+    
+    @Override
+    public Namespace namespace() {
+        return namespace;
+    }
+}
+```
+
+### Identifiable
+
+Extends `Namespaced` with convenience methods for accessing domain and path.
+
+```java
+public interface Identifiable extends Namespaced {
+    default String domain() {
+        return this.namespace().domain();
+    }
+    
+    default String path() {
+        return this.namespace().path();
+    }
+}
+```
+
+Use this interface when you need direct access to domain and path:
+
+```java
+public class MyIdentifiableResource implements Identifiable {
+    private final Namespace namespace;
+    
+    @Override
+    public Namespace namespace() {
+        return namespace;
+    }
+    
+    // domain() and path() are automatically available
+}
+
+MyIdentifiableResource resource = new MyIdentifiableResource();
+String domain = resource.domain();
+String path = resource.path();
+```
+
+## Validation rules
+
+Namespace components must follow these rules:
+
+### Domain rules
+- Must not be blank
+- Can only contain: lowercase letters, numbers, underscores, hyphens, and dots
+- Examples: `minecraft`, `my_plugin`, `mod-name`, `domain.sub`
+
+### Path rules
+- Must not be blank
+- Can contain the same characters as domains
+- Can include forward slashes (`/`) for hierarchical paths
+- Examples: `stone`, `items/sword`, `blocks/building/stone`
+
+### Length limit
+- The complete namespace string (`domain:path`) must not exceed 255 characters
+
+## Examples
+
+### Basic usage
+
+```java
+import com.wirethread.core.namespaces.Namespace;
+import com.wirethread.core.namespaces.utils.NamespaceBuilder;
+
+// Create a namespace for a custom item
+Namespace customSword = new Namespace("myplugin", "items/weapons/sword");
+
+// Parse from string
+Namespace parsed = NamespaceBuilder.from("minecraft:stone");
+
+// Use predefined domains
+Namespace mcBlock = NamespaceBuilder.fromMinecraft("dirt");
+Namespace wtFeature = NamespaceBuilder.fromWirethread("custom_feature");
+
+// Join paths
+Namespace items = new Namespace("myplugin", "items");
+Namespace weapon = items.join("weapons");
+Namespace sword = weapon.join("diamond_sword");
+// Result: myplugin:items/weapons/diamond_sword
+```
+
+### Using with identifiable resources
+
+```java
+import com.wirethread.core.namespaces.Identifiable;
+import com.wirethread.core.namespaces.Namespace;
+
+public class CustomBlock implements Identifiable {
+    private final Namespace namespace;
+    private final String displayName;
+    
+    public CustomBlock(String domain, String path, String displayName) {
+        this.namespace = new Namespace(domain, path);
+        this.displayName = displayName;
+    }
+    
+    @Override
+    public Namespace namespace() {
+        return namespace;
+    }
+    
+    public String getDisplayName() {
+        return displayName;
+    }
+}
+
+// Usage
+CustomBlock block = new CustomBlock("myplugin", "blocks/custom", "Custom Block");
+String domain = block.domain(); // "myplugin"
+String path = block.path(); // "blocks/custom"
+String full = block.namespace().toString(); // "myplugin:blocks/custom"
+```
+
+### Validation
+
+```java
+// Validate components before creating namespace
+String domain = "my-plugin";
+String path = "items/sword";
+
+if (Namespace.assertValidDomain(domain) && Namespace.assertValidPath(path)) {
+    Namespace ns = new Namespace(domain, path);
+    System.out.println("Created namespace: " + ns);
+} else {
+    System.err.println("Invalid namespace components");
+}
+```

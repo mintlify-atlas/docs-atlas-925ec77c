@@ -1,0 +1,513 @@
+---
+title: Packet handling
+description: Handle network packets in Wirethread for client-server communication
+---
+
+Learn how to work with Wirethread's packet system to handle network communication between clients and servers.
+
+## Understanding packets
+
+Wirethread uses a type-safe packet system based on Java records and the Netty framework. All packets implement the `Packet` interface and are categorized by their direction and connection state.
+
+## Packet structure
+
+The base `Packet` interface:
+
+```java
+package com.wirethread.network.packet;
+
+import com.wirethread.network.connection.ConnectionState;
+import org.jetbrains.annotations.NotNull;
+
+public interface Packet {
+    
+    /**
+     * Returns the bound of this packet.
+     */
+    @NotNull
+    PacketBound getBound();
+    
+    /**
+     * Returns the current state of this packet.
+     */
+    @NotNull
+    ConnectionState getConnectionState();
+    
+    /**
+     * Whether this packet terminates the connection.
+     */
+    default boolean isTerminal() {
+        return false;
+    }
+}
+```
+
+## Packet types
+
+### Server-bound packets
+
+Packets sent from the client to the server:
+
+```java
+public interface ServerBoundPacket extends Packet {
+    
+    default @NotNull PacketBound getBound() {
+        return PacketBound.SERVER_BOUND;
+    }
+    
+    interface Handshaking extends ServerBoundPacket { }
+    interface Login extends ServerBoundPacket { }
+    interface Status extends ServerBoundPacket { }
+    interface Configuration extends ServerBoundPacket { }
+    interface Play extends ServerBoundPacket { }
+}
+```
+
+### Client-bound packets
+
+Packets sent from the server to the client:
+
+```java
+public interface ClientBoundPacket extends Packet {
+    
+    @Override
+    default @NotNull PacketBound getBound() {
+        return PacketBound.CLIENT_BOUND;
+    }
+    
+    interface Status extends ClientBoundPacket { }
+    interface Login extends ClientBoundPacket { }
+    interface Configuration extends ClientBoundPacket { }
+    interface Play extends ClientBoundPacket { }
+}
+```
+
+## Connection states
+
+Packets are organized by connection state:
+
+- **HANDSHAKE** - Initial connection setup
+- **STATUS** - Server status requests
+- **LOGIN** - Player authentication
+- **CONFIGURATION** - Client configuration
+- **PLAY** - In-game packets
+
+## Creating packet handlers
+
+<Steps>
+  <Step title="Understand packet serialization">
+    Each packet includes a `SERIALIZER` field that handles reading and writing:
+
+    ```java
+    package com.wirethread.network.packet.server.login;
+
+    import com.wirethread.network.packet.server.ServerBoundPacket;
+    import com.wirethread.network.types.Primitives;
+    import com.wirethread.network.types.Type;
+    import io.netty.buffer.ByteBuf;
+    import org.jetbrains.annotations.NotNull;
+
+    import java.io.IOException;
+    import java.util.UUID;
+
+    public record LoginStartPacket(
+        @NotNull String playerName,
+        @NotNull UUID playerId
+    ) implements ServerBoundPacket.Login {
+        
+        public static final Type<LoginStartPacket> SERIALIZER = new Type<LoginStartPacket>() {
+            @Override
+            public void write(@NotNull ByteBuf buffer, LoginStartPacket value) throws IOException {
+                Primitives.STRING.write(buffer, value.playerName);
+                Primitives.UUID_TYPE.write(buffer, value.playerId);
+            }
+            
+            @Override
+            public LoginStartPacket read(@NotNull ByteBuf buffer) throws IOException {
+                return new LoginStartPacket(
+                    Primitives.STRING.read(buffer),
+                    Primitives.UUID_TYPE.read(buffer)
+                );
+            }
+        };
+    }
+    ```
+  </Step>
+
+  <Step title="Create a custom packet">
+    Define your packet as a Java record:
+
+    ```java
+    package com.example.packets;
+
+    import com.wirethread.network.packet.server.ServerBoundPacket;
+    import com.wirethread.network.types.Numbers;
+    import com.wirethread.network.types.Primitives;
+    import com.wirethread.network.types.Type;
+    import io.netty.buffer.ByteBuf;
+    import org.jetbrains.annotations.NotNull;
+
+    import java.io.IOException;
+
+    public record CustomActionPacket(
+        @NotNull String actionType,
+        @NotNull Integer actionId,
+        @NotNull String data
+    ) implements ServerBoundPacket.Play {
+        
+        public static final Type<CustomActionPacket> SERIALIZER = new Type<>() {
+            @Override
+            public void write(@NotNull ByteBuf buffer, CustomActionPacket value) throws IOException {
+                Primitives.STRING.write(buffer, value.actionType);
+                Numbers.VAR_INT.write(buffer, value.actionId);
+                Primitives.STRING.write(buffer, value.data);
+            }
+            
+            @Override
+            public CustomActionPacket read(@NotNull ByteBuf buffer) throws IOException {
+                return new CustomActionPacket(
+                    Primitives.STRING.read(buffer),
+                    Numbers.VAR_INT.read(buffer),
+                    Primitives.STRING.read(buffer)
+                );
+            }
+        };
+    }
+    ```
+  </Step>
+
+  <Step title="Handle the packet">
+    Process incoming packets in your server code:
+
+    ```java
+    package com.example.handlers;
+
+    import com.example.packets.CustomActionPacket;
+    import org.apache.logging.log4j.LogManager;
+    import org.apache.logging.log4j.Logger;
+
+    public class CustomActionHandler {
+        
+        private static final Logger LOGGER = LogManager.getLogger(CustomActionHandler.class);
+        
+        public void handleCustomAction(CustomActionPacket packet) {
+            String actionType = packet.actionType();
+            Integer actionId = packet.actionId();
+            String data = packet.data();
+            
+            LOGGER.info("Received action: {} (ID: {}) with data: {}", 
+                       actionType, actionId, data);
+            
+            // Process the action
+            switch (actionType) {
+                case "jump" -> handleJumpAction(actionId, data);
+                case "interact" -> handleInteractAction(actionId, data);
+                default -> LOGGER.warn("Unknown action type: {}", actionType);
+            }
+        }
+        
+        private void handleJumpAction(Integer id, String data) {
+            // Handle jump logic
+        }
+        
+        private void handleInteractAction(Integer id, String data) {
+            // Handle interact logic
+        }
+    }
+    ```
+  </Step>
+</Steps>
+
+## Built-in packet examples
+
+### Handshake packet
+
+```java
+package com.wirethread.network.packet.server.handshake;
+
+import com.wirethread.core.exceptions.network.PacketFormatException;
+import com.wirethread.network.connection.ConnectionIntention;
+import com.wirethread.network.packet.server.ServerBoundPacket;
+import com.wirethread.network.types.Numbers;
+import com.wirethread.network.types.Primitives;
+import com.wirethread.network.types.Type;
+import io.netty.buffer.ByteBuf;
+import org.jetbrains.annotations.NotNull;
+
+import java.io.IOException;
+
+public record HandshakePacket(
+    @NotNull Integer protocolVersion,
+    @NotNull String serverAddress,
+    @NotNull Integer serverPort,
+    @NotNull ConnectionIntention intention
+) implements ServerBoundPacket.Handshaking {
+    
+    public static final Type<HandshakePacket> SERIALIZER = new Type<>() {
+        @Override
+        public void write(@NotNull ByteBuf buffer, HandshakePacket value) throws IOException {
+            throw new PacketFormatException(
+                "Invalid operation.",
+                PacketFormatException.Type.NOT_ALLOWED
+            );
+        }
+        
+        @Override
+        public HandshakePacket read(@NotNull ByteBuf buffer) throws IOException {
+            if (!buffer.isReadable(1)) {
+                throw new PacketFormatException(
+                    "Cannot read only one byte from buffer.",
+                    PacketFormatException.Type.NOT_ENOUGH_DATA
+                );
+            }
+            
+            return new HandshakePacket(
+                Numbers.VAR_INT.read(buffer),
+                Primitives.STRING.read(buffer),
+                Numbers.UNSIGNED_SHORT.read(buffer),
+                Primitives.INTENTION_TYPE.read(buffer)
+            );
+        }
+    };
+}
+```
+
+### Login success packet
+
+```java
+package com.wirethread.network.packet.client.login;
+
+import com.wirethread.network.packet.client.ClientBoundPacket;
+import com.wirethread.network.packet.utils.GameProfile;
+import com.wirethread.network.types.Type;
+import com.wirethread.network.types.TypeTemplate;
+import org.jetbrains.annotations.NotNull;
+
+public record LoginSuccessPacket(
+    @NotNull GameProfile profile
+) implements ClientBoundPacket.Login {
+    
+    public static final Type<LoginSuccessPacket> SERIALIZER = TypeTemplate.template(
+        GameProfile.SERIALIZER, 
+        LoginSuccessPacket::profile, 
+        LoginSuccessPacket::new
+    );
+}
+```
+
+## Working with data types
+
+Wirethread provides type serializers for common data:
+
+### Primitive types
+
+```java
+import com.wirethread.network.types.Primitives;
+import io.netty.buffer.ByteBuf;
+
+// String
+Primitives.STRING.write(buffer, "Hello");
+String str = Primitives.STRING.read(buffer);
+
+// UUID
+UUID uuid = UUID.randomUUID();
+Primitives.UUID_TYPE.write(buffer, uuid);
+UUID readUuid = Primitives.UUID_TYPE.read(buffer);
+
+// Boolean
+Primitives.BOOLEAN.write(buffer, true);
+boolean bool = Primitives.BOOLEAN.read(buffer);
+```
+
+### Number types
+
+```java
+import com.wirethread.network.types.Numbers;
+import io.netty.buffer.ByteBuf;
+
+// VarInt (variable-length integer)
+Numbers.VAR_INT.write(buffer, 12345);
+int varInt = Numbers.VAR_INT.read(buffer);
+
+// VarLong
+Numbers.VAR_LONG.write(buffer, 9876543210L);
+long varLong = Numbers.VAR_LONG.read(buffer);
+
+// Unsigned short
+Numbers.UNSIGNED_SHORT.write(buffer, 65535);
+int unsignedShort = Numbers.UNSIGNED_SHORT.read(buffer);
+```
+
+### Custom types
+
+Create your own type serializer:
+
+```java
+import com.wirethread.network.types.Type;
+import io.netty.buffer.ByteBuf;
+import org.jetbrains.annotations.NotNull;
+
+import java.io.IOException;
+
+public class CustomDataType {
+    
+    public static final Type<PlayerData> PLAYER_DATA = new Type<>() {
+        @Override
+        public void write(@NotNull ByteBuf buffer, PlayerData value) throws IOException {
+            Primitives.STRING.write(buffer, value.name());
+            Numbers.VAR_INT.write(buffer, value.level());
+            Numbers.VAR_INT.write(buffer, value.experience());
+        }
+        
+        @Override
+        public PlayerData read(@NotNull ByteBuf buffer) throws IOException {
+            return new PlayerData(
+                Primitives.STRING.read(buffer),
+                Numbers.VAR_INT.read(buffer),
+                Numbers.VAR_INT.read(buffer)
+            );
+        }
+    };
+    
+    public record PlayerData(String name, int level, int experience) {}
+}
+```
+
+## Error handling
+
+### Packet format exceptions
+
+```java
+import com.wirethread.core.exceptions.network.PacketFormatException;
+import io.netty.buffer.ByteBuf;
+
+public void validatePacket(ByteBuf buffer) throws PacketFormatException {
+    if (!buffer.isReadable(4)) {
+        throw new PacketFormatException(
+            "Not enough data to read packet",
+            PacketFormatException.Type.NOT_ENOUGH_DATA
+        );
+    }
+    
+    int packetId = buffer.readInt();
+    if (packetId < 0 || packetId > 255) {
+        throw new PacketFormatException(
+            "Invalid packet ID: " + packetId,
+            PacketFormatException.Type.INVALID_DATA
+        );
+    }
+}
+```
+
+### Decoder exceptions
+
+```java
+import com.wirethread.core.exceptions.network.InboundDecoderException;
+
+try {
+    CustomPacket packet = CustomPacket.SERIALIZER.read(buffer);
+} catch (IOException e) {
+    throw new InboundDecoderException("Failed to decode packet", e);
+}
+```
+
+## Connection management
+
+Access the connection manager from your server:
+
+```java
+import com.wirethread.network.connection.ConnectionManager;
+import com.wirethread.server.Server;
+
+public class PacketService {
+    
+    private final ConnectionManager connectionManager;
+    
+    public PacketService(Server server) {
+        this.connectionManager = server.serverProcess.connectionManager();
+    }
+    
+    public void sendPacketToAll(Packet packet) {
+        // Send packet to all connected clients
+        // Implementation depends on ConnectionManager API
+    }
+}
+```
+
+## Best practices
+
+<AccordionGroup>
+  <Accordion title="Use records for packets">
+    Java records provide immutability and concise syntax, perfect for packets.
+    
+    ```java
+    // Good - using record
+    public record PlayerMovePacket(
+        double x, double y, double z, 
+        float yaw, float pitch
+    ) implements ServerBoundPacket.Play { }
+    
+    // Avoid - mutable class
+    public class PlayerMovePacket implements ServerBoundPacket.Play {
+        private double x, y, z;
+        private float yaw, pitch;
+        // getters/setters...
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Validate buffer readability">
+    Always check if enough data is available before reading.
+    
+    ```java
+    @Override
+    public MyPacket read(@NotNull ByteBuf buffer) throws IOException {
+        if (!buffer.isReadable(4)) {
+            throw new PacketFormatException(
+                "Insufficient data",
+                PacketFormatException.Type.NOT_ENOUGH_DATA
+            );
+        }
+        return new MyPacket(buffer.readInt());
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Use appropriate data types">
+    Choose the correct serializer for your data to minimize packet size.
+    
+    ```java
+    // For small integers (0-2097151), use VarInt
+    Numbers.VAR_INT.write(buffer, count);
+    
+    // For port numbers, use unsigned short
+    Numbers.UNSIGNED_SHORT.write(buffer, port);
+    
+    // For large numbers, use VarLong
+    Numbers.VAR_LONG.write(buffer, timestamp);
+    ```
+  </Accordion>
+
+  <Accordion title="Handle exceptions properly">
+    Catch and handle packet-related exceptions appropriately.
+    
+    ```java
+    try {
+        Packet packet = readPacket(buffer);
+        handlePacket(packet);
+    } catch (PacketFormatException e) {
+        LOGGER.error("Invalid packet format: {}", e.getMessage());
+        disconnectClient("Invalid packet");
+    } catch (IOException e) {
+        LOGGER.error("IO error reading packet", e);
+        exceptionManager.handleException(e);
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next steps
+
+- Learn about server setup in the [Server setup](/guides/server-setup) guide
+- Create plugins in the [Creating plugins](/guides/creating-plugins) guide
+- Work with blocks in the [Block system](/guides/block-system) guide

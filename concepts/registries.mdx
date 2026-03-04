@@ -1,0 +1,543 @@
+---
+title: Registries
+description: Managing game resources with Wirethread's registry system
+---
+
+Wirethread uses a registry system to manage game resources like blocks, items, biomes, and other game elements. The registry system provides type-safe, namespace-based resource management with both static and dynamic registry types.
+
+## Registry overview
+
+Registries store and retrieve game resources using namespace-based identifiers. Each resource must be registrable and uniquely identified.
+
+<Info>
+  The registry system ensures resources are properly organized and accessible throughout the server lifecycle.
+</Info>
+
+## Core interfaces
+
+### Registrable interface
+
+All resources that can be registered must implement the `Registrable` interface:
+
+```java
+package com.wirethread.core.registry.repository;
+
+import com.wirethread.core.namespaces.Namespaced;
+
+/**
+ * Represents a game resource which can be identified by a
+ * namespace and a numeric id.
+ */
+public interface Registrable extends Namespaced {
+}
+```
+
+<Tip>
+  `Registrable` extends `Namespaced`, which means every registrable resource must provide a `namespace()` method.
+</Tip>
+
+### Registry interface
+
+The `Registry` interface defines operations for managing registrable resources:
+
+```java
+package com.wirethread.core.registry.repository;
+
+import com.wirethread.core.namespaces.Namespace;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+import java.util.List;
+
+public interface Registry<R extends Registrable> {
+
+    /**
+     * Register a new entry overriding the existing registry, if one exists.
+     *
+     * @param entry An entry which must extend from {@link Registrable}
+     * @return The namespace of this registry entry.
+     * @throws UnsupportedOperationException When this operation isn't supported
+     */
+    @Nullable R register(final @NotNull R entry) 
+        throws UnsupportedOperationException;
+
+    /**
+     * Register a set of entries overriding existing registries, if some exist.
+     *
+     * @param entries A list of entries.
+     * @return A list of the registered namespaces.
+     */
+    default @Nullable List<R> register(final @NotNull List<? extends R> entries) {
+        return entries.stream().map(this::register).toList();
+    }
+
+    /**
+     * Unregister an entry by using their namespace.
+     *
+     * @param namespace The entry namespace.
+     * @return The removed registry entry.
+     * @throws UnsupportedOperationException When this operation isn't supported
+     */
+    @Nullable R unregister(@NotNull Namespace namespace) 
+        throws UnsupportedOperationException;
+
+    /**
+     * Retrieves a registry entry with the namespace given.
+     *
+     * @param namespace A registry entry namespace.
+     * @return A registry entry or null if not found.
+     */
+    @Nullable R get(@NotNull Namespace namespace);
+
+    /**
+     * Retrieves a registry entry with the id given.
+     *
+     * @param id A registered entry id.
+     * @return A registry entry or null if not found.
+     */
+    @Nullable R get(int id);
+
+    /**
+     * Retrieves a view of all the entries of this registry.
+     *
+     * @return A list of type {@code R}
+     */
+    @NotNull List<R> values();
+}
+```
+
+## Registry types
+
+Wirethread provides two types of registries:
+
+### Static registries
+
+Static registries are **immutable** - resources cannot be added or removed at runtime:
+
+```java
+package com.wirethread.core.registry.repository;
+
+import com.wirethread.core.namespaces.Namespace;
+import com.wirethread.core.registry.resources.ResourceManager;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+import java.util.List;
+
+public final class StaticRegistry<T extends Registrable> implements Registry<T> {
+
+    /**
+     * Creates a new registry with an immutable namespace.
+     *
+     * @param id The resource location for this registry.
+     */
+    public StaticRegistry(@NotNull String id, 
+                         final @NotNull ResourceManager resourceManager) {
+    }
+
+    @Override
+    public @Nullable T register(@NotNull T entry) {
+        throw new UnsupportedOperationException(
+            "This class does not support register new entries.");
+    }
+
+    @Override
+    public @Nullable T unregister(@NotNull Namespace namespace) {
+        throw new UnsupportedOperationException(
+            "This class does not support unregister entries.");
+    }
+
+    @Override
+    public @Nullable T get(@NotNull Namespace namespace) {
+        return null;
+    }
+
+    @Override
+    public @Nullable T get(int id) {
+        return null;
+    }
+
+    @Override
+    public @NotNull List<T> values() {
+        return List.of();
+    }
+}
+```
+
+<Warning>
+  Static registries throw `UnsupportedOperationException` if you try to register or unregister entries at runtime.
+</Warning>
+
+**Use static registries for:**
+- Core game resources (vanilla blocks, items, biomes)
+- Resources loaded from data packs
+- Resources that shouldn't change during runtime
+
+### Dynamic registries
+
+Dynamic registries allow **runtime modification** - resources can be added and removed:
+
+```java
+package com.wirethread.core.registry.repository;
+
+import com.wirethread.core.namespaces.Namespace;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+import java.util.List;
+
+public abstract class DynamicRegistry<T extends Registrable> implements Registry<T> {
+
+    public DynamicRegistry() {
+    }
+
+    @Override
+    public @Nullable T register(@NotNull T entry) {
+        return null;
+    }
+
+    @Override
+    public @Nullable T unregister(@NotNull Namespace namespace) {
+        return null;
+    }
+
+    @Override
+    public @Nullable T get(@NotNull Namespace namespace) {
+        return null;
+    }
+
+    @Override
+    public @Nullable T get(int id) {
+        return null;
+    }
+
+    @Override
+    public @NotNull List<T> values() {
+        return List.of();
+    }
+}
+```
+
+**Use dynamic registries for:**
+- Plugin-added resources
+- Temporary or event-specific resources
+- Resources that need to be reloaded
+
+## Registry records
+
+Wirethread organizes registries into records for centralized access:
+
+### StaticRegistries
+
+```java
+package com.wirethread.core.registry.records;
+
+import com.wirethread.core.biome.BiomeType;
+import com.wirethread.core.registry.repository.StaticRegistry;
+import org.jetbrains.annotations.NotNull;
+
+/**
+ * Holds all static registries handled by the server.
+ */
+public record StaticRegistries(
+    @NotNull StaticRegistry<BiomeType> biomeType
+    // Additional static registries...
+    // @NotNull StaticRegistry<ChatType> chatType,
+    // @NotNull StaticRegistry<DimensionType> dimensionType,
+    // @NotNull StaticRegistry<DamageType> damageType,
+) {
+}
+```
+
+### DynamicRegistries
+
+```java
+package com.wirethread.core.registry.records;
+
+import com.wirethread.core.biome.BiomeType;
+import com.wirethread.core.registry.repository.DynamicRegistry;
+import org.jetbrains.annotations.NotNull;
+
+/**
+ * Holds all dynamic registries handled by the server.
+ */
+public record DynamicRegistries(
+    @NotNull DynamicRegistry<BiomeType> biomeType
+    // Additional dynamic registries...
+) {
+}
+```
+
+These records are accessible from the `Server` class:
+
+```java
+public abstract class Server {
+    protected volatile DynamicRegistries serverRegistries;
+    private volatile StaticRegistries staticRegistries;
+    
+    // Access registries
+}
+```
+
+## Creating registrable resources
+
+Here's how to create a custom registrable resource:
+
+```java
+import com.wirethread.core.registry.repository.Registrable;
+import com.wirethread.core.namespaces.Namespace;
+import org.jetbrains.annotations.NotNull;
+
+public class CustomBlock implements Registrable {
+    private final Namespace namespace;
+    private final String displayName;
+    private final float hardness;
+    
+    public CustomBlock(String domain, String name, String displayName, float hardness) {
+        this.namespace = Namespace.of(domain, "blocks/" + name);
+        this.displayName = displayName;
+        this.hardness = hardness;
+    }
+    
+    @Override
+    public @NotNull Namespace namespace() {
+        return namespace;
+    }
+    
+    // Getters
+    public String getDisplayName() {
+        return displayName;
+    }
+    
+    public float getHardness() {
+        return hardness;
+    }
+    
+    @Override
+    public String toString() {
+        return "CustomBlock{" + namespace + ", hardness=" + hardness + "}";
+    }
+}
+```
+
+## Registering resources
+
+<CodeGroup>
+
+```java Single registration
+import com.wirethread.core.registry.repository.Registry;
+import com.wirethread.core.namespaces.Namespace;
+
+public void registerBlock(Registry<CustomBlock> blockRegistry) {
+    CustomBlock copperOre = new CustomBlock(
+        "myplugin",
+        "copper_ore",
+        "Copper Ore",
+        3.0f
+    );
+    
+    blockRegistry.register(copperOre);
+}
+```
+
+```java Batch registration
+import java.util.List;
+
+public void registerBlocks(Registry<CustomBlock> blockRegistry) {
+    List<CustomBlock> blocks = List.of(
+        new CustomBlock("myplugin", "copper_ore", "Copper Ore", 3.0f),
+        new CustomBlock("myplugin", "tin_ore", "Tin Ore", 3.0f),
+        new CustomBlock("myplugin", "silver_ore", "Silver Ore", 3.5f)
+    );
+    
+    blockRegistry.register(blocks);
+}
+```
+
+```java With error handling
+public void safeRegister(Registry<CustomBlock> blockRegistry, CustomBlock block) {
+    try {
+        CustomBlock registered = blockRegistry.register(block);
+        if (registered != null) {
+            System.out.println("Registered: " + registered.namespace());
+        }
+    } catch (UnsupportedOperationException e) {
+        System.err.println("Cannot register to static registry");
+    }
+}
+```
+
+</CodeGroup>
+
+## Retrieving resources
+
+<CodeGroup>
+
+```java By namespace
+import com.wirethread.core.namespaces.Namespace;
+
+public CustomBlock getBlock(Registry<CustomBlock> registry, 
+                           String domain, String name) {
+    Namespace ns = Namespace.of(domain, "blocks/" + name);
+    return registry.get(ns);
+}
+
+// Usage
+CustomBlock ore = getBlock(blockRegistry, "myplugin", "copper_ore");
+if (ore != null) {
+    System.out.println("Found: " + ore.getDisplayName());
+}
+```
+
+```java By numeric ID
+public CustomBlock getBlockById(Registry<CustomBlock> registry, int id) {
+    return registry.get(id);
+}
+
+// Usage
+CustomBlock block = getBlockById(blockRegistry, 42);
+```
+
+```java All values
+import java.util.List;
+
+public void listAllBlocks(Registry<CustomBlock> registry) {
+    List<CustomBlock> allBlocks = registry.values();
+    
+    System.out.println("Registered blocks:");
+    for (CustomBlock block : allBlocks) {
+        System.out.println("  - " + block.namespace() + 
+                         ": " + block.getDisplayName());
+    }
+}
+```
+
+</CodeGroup>
+
+## Unregistering resources
+
+<Warning>
+  Only dynamic registries support unregistration. Static registries will throw `UnsupportedOperationException`.
+</Warning>
+
+```java
+public void removeBlock(Registry<CustomBlock> registry, String domain, String name) {
+    Namespace ns = Namespace.of(domain, "blocks/" + name);
+    
+    try {
+        CustomBlock removed = registry.unregister(ns);
+        if (removed != null) {
+            System.out.println("Unregistered: " + removed.namespace());
+        } else {
+            System.out.println("Block not found");
+        }
+    } catch (UnsupportedOperationException e) {
+        System.err.println("Cannot unregister from static registry");
+    }
+}
+```
+
+## Best practices
+
+<AccordionGroup>
+  <Accordion title="Use appropriate registry type">
+    Choose static registries for immutable resources and dynamic registries for plugin-added content that may change.
+  </Accordion>
+  
+  <Accordion title="Consistent naming">
+    Use consistent namespace patterns like `domain:category/name` (e.g., `myplugin:blocks/copper_ore`).
+  </Accordion>
+  
+  <Accordion title="Handle null returns">
+    Always check for null when retrieving resources - a namespace might not be registered.
+  </Accordion>
+  
+  <Accordion title="Clean up on disable">
+    If using dynamic registries, unregister your plugin's resources when the plugin is disabled.
+  </Accordion>
+  
+  <Accordion title="Avoid duplicate registration">
+    Check if a resource is already registered before attempting to register it again.
+  </Accordion>
+</AccordionGroup>
+
+## Example: Complete registry workflow
+
+```java
+import com.wirethread.core.registry.repository.Registry;
+import com.wirethread.core.registry.repository.Registrable;
+import com.wirethread.core.namespaces.Namespace;
+import org.jetbrains.annotations.NotNull;
+import java.util.List;
+
+// Define a registrable resource
+public class CustomItem implements Registrable {
+    private final Namespace namespace;
+    private final int maxStackSize;
+    
+    public CustomItem(String domain, String name, int maxStackSize) {
+        this.namespace = Namespace.of(domain, "items/" + name);
+        this.maxStackSize = maxStackSize;
+    }
+    
+    @Override
+    public @NotNull Namespace namespace() {
+        return namespace;
+    }
+    
+    public int getMaxStackSize() {
+        return maxStackSize;
+    }
+}
+
+// Plugin that uses registries
+public class ItemPlugin {
+    private final Registry<CustomItem> itemRegistry;
+    private final List<CustomItem> registeredItems;
+    
+    public ItemPlugin(Registry<CustomItem> itemRegistry) {
+        this.itemRegistry = itemRegistry;
+        this.registeredItems = new ArrayList<>();
+    }
+    
+    public void onEnable() {
+        // Register items
+        CustomItem magicSword = new CustomItem("myplugin", "magic_sword", 1);
+        CustomItem healthPotion = new CustomItem("myplugin", "health_potion", 16);
+        
+        itemRegistry.register(magicSword);
+        itemRegistry.register(healthPotion);
+        
+        registeredItems.add(magicSword);
+        registeredItems.add(healthPotion);
+    }
+    
+    public void onDisable() {
+        // Clean up (only for dynamic registries)
+        for (CustomItem item : registeredItems) {
+            try {
+                itemRegistry.unregister(item.namespace());
+            } catch (UnsupportedOperationException e) {
+                // Static registry - items will persist
+            }
+        }
+        registeredItems.clear();
+    }
+    
+    public CustomItem getItem(String name) {
+        Namespace ns = Namespace.of("myplugin", "items/" + name);
+        return itemRegistry.get(ns);
+    }
+}
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Namespaces" icon="tag" href="/concepts/namespaces">
+    Learn more about namespace-based resource identification
+  </Card>
+  <Card title="Plugin system" icon="puzzle-piece" href="/concepts/plugin-system">
+    Understand how plugins register custom resources
+  </Card>
+  <Card title="Architecture" icon="sitemap" href="/concepts/architecture">
+    Explore how registries fit into the framework
+  </Card>
+</CardGroup>

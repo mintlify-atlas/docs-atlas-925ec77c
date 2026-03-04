@@ -1,0 +1,335 @@
+---
+title: Installation
+description: Detailed setup instructions for Wirethread with Gradle
+---
+
+<Note>
+  Wirethread requires Java 17 or higher and Gradle 7.0 or higher.
+</Note>
+
+## Overview
+
+Wirethread is organized as a multi-module Gradle project. To use Wirethread in your project, you'll need to include the appropriate modules based on your needs.
+
+## Module structure
+
+Wirethread consists of four main modules:
+
+<CardGroup cols={2}>
+  <Card title="wirethread-core" icon="cube">
+    Core abstractions, registries, namespaces, coordinates, world management, and game logic
+  </Card>
+  
+  <Card title="wirethread-network" icon="network-wired">
+    Network protocol implementation, packet handling, and Netty-based connection management
+  </Card>
+  
+  <Card title="wirethread-plugin" icon="plug">
+    Plugin system interfaces and dependency injection for extending server functionality
+  </Card>
+  
+  <Card title="wirethread-server" icon="server">
+    Main server implementation with thread management, scheduling, commands, and event system
+  </Card>
+</CardGroup>
+
+## Gradle setup
+
+### Using Wirethread as a multi-module project
+
+Currently, the recommended way to use Wirethread is to include it as part of a multi-module Gradle project.
+
+<Steps>
+  <Step title="Clone the Wirethread repository">
+    ```bash
+    git clone https://github.com/your-org/wirethread.git
+    cd wirethread
+    ```
+  </Step>
+
+  <Step title="Create your settings.gradle.kts">
+    Include the Wirethread modules you need:
+
+    ```kotlin settings.gradle.kts
+    rootProject.name = "my-minecraft-server"
+
+    include(
+        "wirethread-core",
+        "wirethread-network",
+        "wirethread-plugin",
+        "wirethread-server",
+        "my-server"  // Your server implementation
+    )
+    ```
+  </Step>
+
+  <Step title="Configure your build.gradle.kts">
+    Reference the Wirethread modules as project dependencies:
+
+    ```kotlin my-server/build.gradle.kts
+    plugins {
+        id("java")
+        application  // Optional: for running your server
+    }
+
+    group = "com.example.myserver"
+    version = "1.0.0"
+
+    repositories {
+        mavenCentral()
+    }
+
+    dependencies {
+        // Wirethread modules
+        implementation(project(":wirethread-server"))
+        implementation(project(":wirethread-network"))
+        implementation(project(":wirethread-core"))
+        implementation(project(":wirethread-plugin"))
+        
+        // Required dependencies
+        implementation("io.netty:netty-all:4.1.121.Final")
+        implementation("org.apache.logging.log4j:log4j-core:2.23.1")
+        implementation("org.jetbrains:annotations:24.0.0")
+        
+        // Testing
+        testImplementation(platform("org.junit:junit-bom:5.10.0"))
+        testImplementation("org.junit.jupiter:junit-jupiter")
+    }
+
+    tasks.test {
+        useJUnitPlatform()
+    }
+
+    // Optional: Configure the application plugin
+    application {
+        mainClass.set("com.example.myserver.MyMinecraftServer")
+    }
+    ```
+  </Step>
+</Steps>
+
+## Module dependencies
+
+Understanding module dependencies helps you include only what you need:
+
+### wirethread-core
+
+The foundation module with minimal dependencies:
+
+```kotlin build.gradle.kts
+dependencies {
+    implementation("org.jetbrains:annotations:24.0.0")
+}
+```
+
+**Provides:**
+- Registry system (static and dynamic)
+- Namespace and identifier management
+- Coordinate and position utilities
+- World, block, and biome managers
+- Core game abstractions
+
+### wirethread-network
+
+Builds on `wirethread-core` with networking capabilities:
+
+```kotlin build.gradle.kts
+dependencies {
+    implementation(project(":wirethread-core"))
+    implementation("io.netty:netty-all:4.1.121.Final")
+    implementation("org.apache.logging.log4j:log4j-core:2.23.1")
+    implementation("org.jetbrains:annotations:24.0.0")
+}
+```
+
+**Provides:**
+- Packet definitions and serialization
+- Network type system (VarInt, VarLong, UUID, etc.)
+- Connection management
+- Protocol state handling
+
+### wirethread-plugin
+
+Plugin system building on `wirethread-core`:
+
+```kotlin build.gradle.kts
+dependencies {
+    implementation(project(":wirethread-core"))
+    implementation("org.jetbrains:annotations:24.0.0")
+    implementation("org.apache.logging.log4j:log4j-core:2.23.1")
+}
+```
+
+**Provides:**
+- `Pluggable` interface for plugins
+- Plugin namespace management
+- Dependency injection framework
+
+### wirethread-server
+
+The complete server implementation:
+
+```kotlin build.gradle.kts
+dependencies {
+    implementation(project(":wirethread-core"))
+    implementation(project(":wirethread-network"))
+    implementation("io.netty:netty-all:4.1.121.Final")
+    implementation("org.apache.logging.log4j:log4j-core:2.23.1")
+    implementation("org.jetbrains:annotations:24.0.0")
+}
+```
+
+**Provides:**
+- `Server` abstract class
+- Thread management (socket, tick, message queue)
+- Command system
+- Event system
+- Scheduler
+- Exception handling
+- Benchmark tools
+
+## Minimum dependencies
+
+For a basic server, you need at minimum:
+
+```kotlin build.gradle.kts
+dependencies {
+    implementation(project(":wirethread-server"))
+    implementation("io.netty:netty-all:4.1.121.Final")
+    implementation("org.apache.logging.log4j:log4j-core:2.23.1")
+    implementation("org.jetbrains:annotations:24.0.0")
+}
+```
+
+<Info>
+  `wirethread-server` transitively includes `wirethread-core` and `wirethread-network`, so you don't need to declare them explicitly unless you want to use specific versions.
+</Info>
+
+## Java version requirements
+
+Wirethread uses modern Java features and requires:
+
+```kotlin build.gradle.kts
+java {
+    toolchain {
+        languageVersion.set(JavaLanguageVersion.of(17))
+    }
+}
+```
+
+<Warning>
+  Java 17 is the minimum required version. Some features may require Java 21 or higher in future releases.
+</Warning>
+
+## Building from source
+
+To build Wirethread from source:
+
+<Steps>
+  <Step title="Clone the repository">
+    ```bash
+    git clone https://github.com/your-org/wirethread.git
+    cd wirethread
+    ```
+  </Step>
+
+  <Step title="Build all modules">
+    ```bash
+    ./gradlew build
+    ```
+
+    This compiles all modules and runs tests.
+  </Step>
+
+  <Step title="Run the example server">
+    ```bash
+    ./gradlew :wirethread-server:run
+    ```
+
+    This starts the default `WirethreadServer` implementation.
+  </Step>
+</Steps>
+
+## Logging configuration
+
+Wirethread uses Log4j2 for logging. Create a `log4j2.xml` in your `src/main/resources`:
+
+```xml log4j2.xml
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration status="WARN">
+    <Appenders>
+        <Console name="Console" target="SYSTEM_OUT">
+            <PatternLayout pattern="%d{HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n"/>
+        </Console>
+    </Appenders>
+    <Loggers>
+        <Root level="info">
+            <AppenderRef ref="Console"/>
+        </Root>
+    </Loggers>
+</Configuration>
+```
+
+## Next steps
+
+Once you have Wirethread installed:
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Create your first Wirethread server
+  </Card>
+  
+  <Card title="Server API" icon="code" href="/api/server/overview">
+    Learn about the Server class API
+  </Card>
+  
+  <Card title="Plugin development" icon="puzzle-piece" href="/guides/creating-plugins">
+    Build plugins to extend your server
+  </Card>
+  
+  <Card title="Core concepts" icon="book" href="/concepts/architecture">
+    Understand Wirethread's architecture
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Module not found errors">
+    Ensure all Wirethread modules are properly included in your `settings.gradle.kts`:
+    ```kotlin
+    include(
+        "wirethread-core",
+        "wirethread-network",
+        "wirethread-plugin",
+        "wirethread-server"
+    )
+    ```
+  </Accordion>
+  
+  <Accordion title="Java version mismatch">
+    Check your Java version:
+    ```bash
+    java -version
+    ```
+    Should show version 17 or higher. Update your `JAVA_HOME` if needed.
+  </Accordion>
+  
+  <Accordion title="Netty dependency conflicts">
+    Wirethread requires `netty-all:4.1.121.Final`. If you have conflicts:
+    ```kotlin
+    configurations.all {
+        resolutionStrategy {
+            force("io.netty:netty-all:4.1.121.Final")
+        }
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Build fails with compilation errors">
+    Clean and rebuild:
+    ```bash
+    ./gradlew clean build --refresh-dependencies
+    ```
+  </Accordion>
+</AccordionGroup>

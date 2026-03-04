@@ -1,0 +1,394 @@
+---
+title: Blocks
+description: Block-related APIs and utilities
+---
+
+The Wirethread block system provides APIs for working with Minecraft blocks, including block faces and block management.
+
+## Overview
+
+The block module includes:
+
+- **BlockFace**: Enum representing the six faces of a block
+- **BlockManager**: Manager for block operations (currently under development)
+
+These APIs work together with the [coordinate system](/api/core/coordinates) to provide comprehensive block manipulation capabilities.
+
+## BlockFace enum
+
+`BlockFace` represents the six faces of a Minecraft block, each associated with a cardinal direction.
+
+```java
+public enum BlockFace {
+    BOTTOM(Direction.DOWN),
+    TOP(Direction.UP),
+    NORTH(Direction.NORTH),
+    SOUTH(Direction.SOUTH),
+    WEST(Direction.WEST),
+    EAST(Direction.EAST)
+}
+```
+
+### Values
+
+- **BOTTOM**: The bottom face (facing down)
+- **TOP**: The top face (facing up)
+- **NORTH**: The north face
+- **SOUTH**: The south face
+- **WEST**: The west face
+- **EAST**: The east face
+
+### Methods
+
+#### getDirection()
+
+Returns the Direction associated with this block face.
+
+```java
+BlockFace face = BlockFace.TOP;
+Direction direction = face.getDirection(); // Direction.UP
+```
+
+<ResponseField name="return" type="Direction">
+  The direction associated with this face.
+</ResponseField>
+
+#### getOpposite()
+
+Returns the opposite block face.
+
+```java
+BlockFace top = BlockFace.TOP;
+BlockFace bottom = top.getOpposite(); // BlockFace.BOTTOM
+
+BlockFace north = BlockFace.NORTH;
+BlockFace south = north.getOpposite(); // BlockFace.SOUTH
+```
+
+<ResponseField name="return" type="BlockFace">
+  The opposite face.
+</ResponseField>
+
+**Mappings**:
+- BOTTOM ↔ TOP
+- NORTH ↔ SOUTH
+- WEST ↔ EAST
+
+#### isSimilar()
+
+Checks if two block faces are the same or opposite to each other.
+
+<ParamField path="other" type="BlockFace" required>
+  The face to compare with.
+</ParamField>
+
+```java
+BlockFace top = BlockFace.TOP;
+BlockFace bottom = BlockFace.BOTTOM;
+BlockFace north = BlockFace.NORTH;
+
+boolean similar1 = top.isSimilar(top); // true (same)
+boolean similar2 = top.isSimilar(bottom); // true (opposite)
+boolean similar3 = top.isSimilar(north); // false (perpendicular)
+```
+
+<ResponseField name="return" type="boolean">
+  `true` if the faces are the same or opposite, `false` otherwise.
+</ResponseField>
+
+## BlockManager class
+
+`BlockManager` is responsible for managing block operations within the Wirethread framework.
+
+```java
+public final class BlockManager {
+    // Implementation in progress
+}
+```
+
+This class is currently under development. Future versions will include methods for:
+- Block state management
+- Block placement and breaking
+- Block data queries
+- Custom block registration
+
+## Examples
+
+### Working with block faces
+
+```java
+import com.wirethread.core.block.BlockFace;
+import com.wirethread.core.coordinates.Direction;
+import com.wirethread.core.coordinates.Position;
+import com.wirethread.core.coordinates.Point;
+
+public class BlockInteraction {
+    
+    /**
+     * Gets the position of the block adjacent to a face
+     */
+    public Position getAdjacentBlock(Position blockPos, BlockFace face) {
+        Direction direction = face.getDirection();
+        return (Position) blockPos.relative(direction);
+    }
+    
+    /**
+     * Checks if a face is horizontal
+     */
+    public boolean isHorizontalFace(BlockFace face) {
+        return face.getDirection().isHorizontal();
+    }
+    
+    /**
+     * Checks if a face is vertical
+     */
+    public boolean isVerticalFace(BlockFace face) {
+        return face.getDirection().isVertical();
+    }
+    
+    /**
+     * Gets all horizontal faces
+     */
+    public List<BlockFace> getHorizontalFaces() {
+        return Arrays.stream(BlockFace.values())
+            .filter(this::isHorizontalFace)
+            .collect(Collectors.toList());
+        // Returns: [NORTH, SOUTH, WEST, EAST]
+    }
+}
+```
+
+### Block placement logic
+
+```java
+import com.wirethread.core.block.BlockFace;
+import com.wirethread.core.coordinates.Position;
+import com.wirethread.core.coordinates.Direction;
+
+public class BlockPlacer {
+    
+    /**
+     * Places a block on a specific face of another block
+     */
+    public Position getPlacementPosition(Position clickedBlock, BlockFace clickedFace) {
+        // Get the direction of the clicked face
+        Direction direction = clickedFace.getDirection();
+        
+        // Calculate new block position
+        return (Position) clickedBlock.relative(direction);
+    }
+    
+    /**
+     * Determines which face of a block was clicked based on hit position
+     */
+    public BlockFace determineFace(Position blockPos, Position hitPos) {
+        // Calculate the relative position of the hit
+        double dx = hitPos.x() - blockPos.x();
+        double dy = hitPos.y() - blockPos.y();
+        double dz = hitPos.z() - blockPos.z();
+        
+        // Determine which face was hit based on the largest absolute difference
+        double maxDiff = Math.max(Math.max(Math.abs(dx), Math.abs(dy)), Math.abs(dz));
+        
+        if (maxDiff == Math.abs(dy)) {
+            return dy > 0 ? BlockFace.TOP : BlockFace.BOTTOM;
+        } else if (maxDiff == Math.abs(dx)) {
+            return dx > 0 ? BlockFace.EAST : BlockFace.WEST;
+        } else {
+            return dz > 0 ? BlockFace.SOUTH : BlockFace.NORTH;
+        }
+    }
+}
+```
+
+### Face iteration and neighbor checking
+
+```java
+import com.wirethread.core.block.BlockFace;
+import com.wirethread.core.coordinates.Position;
+import com.wirethread.core.coordinates.Point;
+
+import java.util.*;
+import java.util.stream.Collectors;
+
+public class NeighborAnalyzer {
+    
+    /**
+     * Gets all neighboring block positions
+     */
+    public Set<Position> getNeighbors(Position center) {
+        Set<Position> neighbors = new HashSet<>();
+        
+        for (BlockFace face : BlockFace.values()) {
+            Position neighbor = (Position) center.relative(face.getDirection());
+            neighbors.add(neighbor);
+        }
+        
+        return neighbors;
+    }
+    
+    /**
+     * Gets horizontal neighbors only
+     */
+    public Set<Position> getHorizontalNeighbors(Position center) {
+        return Arrays.stream(BlockFace.values())
+            .filter(face -> face.getDirection().isHorizontal())
+            .map(face -> (Position) center.relative(face.getDirection()))
+            .collect(Collectors.toSet());
+    }
+    
+    /**
+     * Checks if two faces are perpendicular
+     */
+    public boolean arePerpendicular(BlockFace face1, BlockFace face2) {
+        return !face1.isSimilar(face2);
+    }
+    
+    /**
+     * Gets all faces perpendicular to a given face
+     */
+    public List<BlockFace> getPerpendicularFaces(BlockFace face) {
+        return Arrays.stream(BlockFace.values())
+            .filter(other -> arePerpendicular(face, other))
+            .collect(Collectors.toList());
+    }
+}
+```
+
+### Direction and face conversion
+
+```java
+import com.wirethread.core.block.BlockFace;
+import com.wirethread.core.coordinates.Direction;
+import com.wirethread.core.coordinates.Position;
+
+public class FaceConverter {
+    
+    /**
+     * Converts a Direction to a BlockFace
+     */
+    public BlockFace directionToFace(Direction direction) {
+        return switch (direction) {
+            case UP -> BlockFace.TOP;
+            case DOWN -> BlockFace.BOTTOM;
+            case NORTH -> BlockFace.NORTH;
+            case SOUTH -> BlockFace.SOUTH;
+            case WEST -> BlockFace.WEST;
+            case EAST -> BlockFace.EAST;
+        };
+    }
+    
+    /**
+     * Gets the face a player is looking at
+     */
+    public BlockFace getLookingFace(Position playerPos) {
+        float yaw = playerPos.yaw();
+        float pitch = playerPos.pitch();
+        
+        // Determine primary direction from yaw and pitch
+        Direction direction = Direction.UP.direction(yaw, pitch);
+        
+        return directionToFace(direction);
+    }
+    
+    /**
+     * Checks if a face is accessible from a direction
+     */
+    public boolean isAccessible(BlockFace face, Direction approachDirection) {
+        // The face is accessible if it's the opposite of the approach direction
+        return face.getDirection() == approachDirection.getOpposite();
+    }
+}
+```
+
+### Block attachment logic
+
+```java
+import com.wirethread.core.block.BlockFace;
+import com.wirethread.core.coordinates.Position;
+
+import java.util.*;
+
+public class AttachmentSystem {
+    
+    /**
+     * Checks if a block can attach to a specific face
+     */
+    public boolean canAttachTo(Position blockPos, BlockFace face, 
+                               Set<Position> solidBlocks) {
+        Position attachmentPos = (Position) blockPos.relative(face.getDirection());
+        return solidBlocks.contains(attachmentPos);
+    }
+    
+    /**
+     * Gets all valid attachment faces for a block
+     */
+    public List<BlockFace> getValidAttachments(Position blockPos, 
+                                               Set<Position> solidBlocks) {
+        List<BlockFace> validFaces = new ArrayList<>();
+        
+        for (BlockFace face : BlockFace.values()) {
+            if (canAttachTo(blockPos, face, solidBlocks)) {
+                validFaces.add(face);
+            }
+        }
+        
+        return validFaces;
+    }
+    
+    /**
+     * Finds the best face to attach to (prefers bottom, then sides, then top)
+     */
+    public Optional<BlockFace> findBestAttachment(Position blockPos, 
+                                                   Set<Position> solidBlocks) {
+        // Priority order: bottom, horizontal faces, top
+        BlockFace[] priority = {
+            BlockFace.BOTTOM,
+            BlockFace.NORTH, BlockFace.SOUTH, BlockFace.WEST, BlockFace.EAST,
+            BlockFace.TOP
+        };
+        
+        for (BlockFace face : priority) {
+            if (canAttachTo(blockPos, face, solidBlocks)) {
+                return Optional.of(face);
+            }
+        }
+        
+        return Optional.empty();
+    }
+}
+```
+
+## Integration with coordinates
+
+Block faces work seamlessly with the coordinate system:
+
+```java
+import com.wirethread.core.block.BlockFace;
+import com.wirethread.core.coordinates.*;
+
+// Get the direction of a face
+BlockFace face = BlockFace.NORTH;
+Direction direction = face.getDirection();
+
+// Move in the direction of a face
+Position blockPos = new Position(10, 64, 20);
+Position adjacentPos = (Position) blockPos.relative(direction);
+
+// Get the opposite position
+BlockFace opposite = face.getOpposite();
+Position oppositePos = (Position) blockPos.relative(opposite.getDirection());
+```
+
+## Best practices
+
+1. **Use BlockFace for surface operations**: When working with block surfaces, use `BlockFace` instead of raw directions
+2. **Check face similarity**: Use `isSimilar()` to determine if two faces are aligned (same axis)
+3. **Convert through Direction**: When you need directional vectors, use `getDirection()` to access the underlying Direction
+4. **Iterate all faces**: Use `BlockFace.values()` to process all faces of a block
+5. **Handle opposites**: Remember that `getOpposite()` provides the face on the other side of the block
+
+## See also
+
+- [Coordinates](/api/core/coordinates) - For working with 3D positions and directions
+- [Core overview](/api/core/overview) - For an overview of all core modules

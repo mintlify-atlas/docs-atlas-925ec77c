@@ -1,0 +1,673 @@
+---
+title: Coordinates
+description: 3D coordinate system and spatial utilities
+---
+
+The Wirethread coordinate system provides a comprehensive set of classes and utilities for working with 3D space in Minecraft. It includes interfaces for points and positions, directional vectors, and conversion utilities.
+
+## Overview
+
+The coordinate system consists of:
+
+- **Point**: Interface representing a point in 3D space with x, y, z coordinates
+- **Position**: Record class extending Point with yaw and pitch rotation
+- **Direction**: Enum for cardinal directions (UP, DOWN, NORTH, SOUTH, EAST, WEST)
+- **Pointer**: Internal implementation of Point for network operations
+- **Conversions**: Utilities for converting between coordinate systems (blocks, chunks, sections, regions)
+
+## Point interface
+
+The `Point` interface represents a point in 3D space.
+
+```java
+public interface Point {
+    double x();
+    double y();
+    double z();
+    // ... additional methods
+}
+```
+
+### Coordinate accessors
+
+#### x(), y(), z()
+
+Returns the x, y, or z coordinate as a double.
+
+```java
+Point point = new Position(10.5, 64.0, 20.5);
+double x = point.x(); // 10.5
+double y = point.y(); // 64.0
+double z = point.z(); // 20.5
+```
+
+<ResponseField name="return" type="double">
+  The coordinate value.
+</ResponseField>
+
+#### blockX(), blockY(), blockZ()
+
+Returns the floored block coordinate.
+
+```java
+Point point = new Position(10.7, 64.3, 20.9);
+int blockX = point.blockX(); // 10
+int blockY = point.blockY(); // 64
+int blockZ = point.blockZ(); // 20
+```
+
+<ResponseField name="return" type="int">
+  The floored block coordinate.
+</ResponseField>
+
+#### sectionX(), sectionY(), sectionZ()
+
+Returns the section (chunk) coordinate.
+
+```java
+int sectionX = point.sectionX();
+int sectionY = point.sectionY();
+int sectionZ = point.sectionZ();
+```
+
+<ResponseField name="return" type="int">
+  The section coordinate.
+</ResponseField>
+
+#### chunkX(), chunkY(), chunkZ()
+
+Alias for section coordinates.
+
+```java
+int chunkX = point.chunkX();
+int chunkZ = point.chunkZ();
+```
+
+<ResponseField name="return" type="int">
+  The chunk coordinate.
+</ResponseField>
+
+#### regionX(), regionY(), regionZ()
+
+Returns the region coordinate (32x32 chunks).
+
+```java
+int regionX = point.regionX();
+int regionZ = point.regionZ();
+```
+
+<ResponseField name="return" type="int">
+  The region coordinate.
+</ResponseField>
+
+### Modification methods
+
+#### withX(), withY(), withZ()
+
+Creates a new point with the specified coordinate changed.
+
+<ParamField path="coordinate" type="double" required>
+  The new coordinate value.
+</ParamField>
+
+```java
+Point original = new Position(10, 64, 20);
+Point moved = original.withX(15); // (15, 64, 20)
+```
+
+<ResponseField name="return" type="Point">
+  A new point with the modified coordinate.
+</ResponseField>
+
+#### withX(operator), withY(operator), withZ(operator)
+
+Creates a new point by applying a function to a coordinate.
+
+<ParamField path="operator" type="DoubleUnaryOperator" required>
+  A function that transforms the coordinate value.
+</ParamField>
+
+```java
+Point original = new Position(10, 64, 20);
+Point doubled = original.withX(x -> x * 2); // (20, 64, 20)
+Point incremented = original.withY(y -> y + 1); // (10, 65, 20)
+```
+
+<ResponseField name="return" type="Point">
+  A new point with the modified coordinate.
+</ResponseField>
+
+### Arithmetic operations
+
+#### add()
+
+Adds values to coordinates.
+
+```java
+// Add single value to all coordinates
+Point result = point.add(5); // Adds 5 to x, y, z
+
+// Add individual values
+Point result = point.add(1, 2, 3); // Adds 1 to x, 2 to y, 3 to z
+
+// Add another point
+Point result = point.add(otherPoint);
+```
+
+<ParamField path="value" type="double">
+  Value to add to all coordinates.
+</ParamField>
+
+<ParamField path="x" type="double">
+  Value to add to x coordinate.
+</ParamField>
+
+<ParamField path="y" type="double">
+  Value to add to y coordinate.
+</ParamField>
+
+<ParamField path="z" type="double">
+  Value to add to z coordinate.
+</ParamField>
+
+<ResponseField name="return" type="Point">
+  A new point with added coordinates.
+</ResponseField>
+
+#### sub()
+
+Subtracts values from coordinates.
+
+```java
+Point result = point.sub(5); // Subtracts 5 from x, y, z
+Point result = point.sub(1, 2, 3); // Subtracts individually
+Point result = point.sub(otherPoint); // Subtracts another point
+```
+
+<ResponseField name="return" type="Point">
+  A new point with subtracted coordinates.
+</ResponseField>
+
+#### mul()
+
+Multiplies coordinates by values.
+
+```java
+Point result = point.mul(2); // Doubles all coordinates
+Point result = point.mul(2, 1, 2); // Multiplies individually
+Point result = point.mul(otherPoint); // Multiplies by another point
+```
+
+<ResponseField name="return" type="Point">
+  A new point with multiplied coordinates.
+</ResponseField>
+
+#### div()
+
+Divides coordinates by values.
+
+```java
+Point result = point.div(2); // Halves all coordinates
+Point result = point.div(2, 1, 2); // Divides individually
+Point result = point.div(otherPoint); // Divides by another point
+```
+
+<ResponseField name="return" type="Point">
+  A new point with divided coordinates.
+</ResponseField>
+
+### Comparison methods
+
+#### samePoint()
+
+Checks if this point has the same coordinates as another.
+
+```java
+boolean same = point.samePoint(10, 64, 20);
+boolean same = point.samePoint(otherPoint);
+
+// With tolerance (for floating-point comparisons)
+boolean same = point.samePoint(10.001, 64, 20, 0.01);
+boolean same = point.samePoint(otherPoint, 0.01);
+```
+
+<ParamField path="x" type="double">
+  X coordinate to compare.
+</ParamField>
+
+<ParamField path="y" type="double">
+  Y coordinate to compare.
+</ParamField>
+
+<ParamField path="z" type="double">
+  Z coordinate to compare.
+</ParamField>
+
+<ParamField path="tolerance" type="double">
+  Maximum allowed difference between coordinates.
+</ParamField>
+
+<ResponseField name="return" type="boolean">
+  `true` if coordinates match (within tolerance), `false` otherwise.
+</ResponseField>
+
+#### isZero()
+
+Checks if all coordinates are zero.
+
+```java
+boolean isOrigin = point.isZero();
+```
+
+<ResponseField name="return" type="boolean">
+  `true` if x, y, and z are all 0.
+</ResponseField>
+
+### Spatial methods
+
+#### relative()
+
+Returns the point relative to a direction.
+
+<ParamField path="direction" type="Direction" required>
+  The direction to move.
+</ParamField>
+
+```java
+Point above = point.relative(Direction.UP); // Moves up by 1
+Point north = point.relative(Direction.NORTH); // Moves north by 1
+```
+
+<ResponseField name="return" type="Point">
+  A new point offset by the direction's normal vector.
+</ResponseField>
+
+#### squaredDistance()
+
+Calculates the squared distance to another point.
+
+```java
+double distSq = point.squaredDistance(10, 64, 20);
+double distSq = point.squaredDistance(otherPoint);
+```
+
+<ResponseField name="return" type="double">
+  The squared Euclidean distance.
+</ResponseField>
+
+#### distance()
+
+Calculates the distance to another point.
+
+```java
+double dist = point.distance(10, 64, 20);
+```
+
+<ResponseField name="return" type="double">
+  The Euclidean distance.
+</ResponseField>
+
+## Position class
+
+`Position` is a record class that represents a point with rotation (yaw and pitch).
+
+```java
+public record Position(double x, double y, double z, float yaw, float pitch) 
+    implements Point
+```
+
+### Constructor
+
+<ParamField path="x" type="double" required>
+  The x coordinate (horizontal).
+</ParamField>
+
+<ParamField path="y" type="double" required>
+  The y coordinate (vertical).
+</ParamField>
+
+<ParamField path="z" type="double" required>
+  The z coordinate (horizontal).
+</ParamField>
+
+<ParamField path="yaw" type="float" required>
+  Rotation around the y-axis (horizontal rotation). Automatically clamped to [-180, 180).
+</ParamField>
+
+<ParamField path="pitch" type="float" required>
+  Rotation around the x-axis (vertical rotation).
+</ParamField>
+
+```java
+// Position with coordinates and rotation
+Position pos = new Position(10.5, 64.0, 20.5, 0f, 0f);
+
+// Position with just coordinates (yaw and pitch default to 0)
+Position pos = new Position(10.5, 64.0, 20.5);
+
+// Position from a Point
+Position pos = new Position(point, 45f, -30f);
+Position pos = new Position(point);
+```
+
+### Constants
+
+```java
+Position.ZERO // Position at (0, 0, 0) with 0 yaw and pitch
+```
+
+### Rotation methods
+
+#### withYaw()
+
+Creates a new position with updated yaw.
+
+<ParamField path="yaw" type="float" required>
+  The new yaw angle.
+</ParamField>
+
+```java
+Position rotated = position.withYaw(90f);
+```
+
+<ResponseField name="return" type="Position">
+  A new position with the updated yaw.
+</ResponseField>
+
+#### withPitch()
+
+Creates a new position with updated pitch.
+
+<ParamField path="pitch" type="float" required>
+  The new pitch angle.
+</ParamField>
+
+```java
+Position rotated = position.withPitch(-45f);
+```
+
+<ResponseField name="return" type="Position">
+  A new position with the updated pitch.
+</ResponseField>
+
+#### withView()
+
+Creates a new position with updated yaw and pitch.
+
+```java
+// Set both angles
+Position rotated = position.withView(90f, -30f);
+
+// Copy view from another position
+Position rotated = position.withView(otherPosition);
+```
+
+<ParamField path="yaw" type="float" required>
+  The new yaw angle.
+</ParamField>
+
+<ParamField path="pitch" type="float" required>
+  The new pitch angle.
+</ParamField>
+
+<ResponseField name="return" type="Position">
+  A new position with the updated view angles.
+</ResponseField>
+
+#### withDirection()
+
+Creates a position facing a specific direction vector.
+
+<ParamField path="direction" type="Point" required>
+  A vector indicating the direction to face.
+</ParamField>
+
+```java
+Point direction = new Pointer(1, 0, 0); // East
+Position facing = position.withDirection(direction);
+```
+
+<ResponseField name="return" type="Position">
+  A new position with yaw and pitch calculated to face the given direction.
+</ResponseField>
+
+### Coordinate update methods
+
+#### withXYZ()
+
+Creates a position with updated coordinates, preserving rotation.
+
+```java
+Position moved = position.withXYZ(15, 70, 25);
+Position moved = position.withXYZ(otherPoint);
+```
+
+<ParamField path="x" type="double" required>
+  The new x coordinate.
+</ParamField>
+
+<ParamField path="y" type="double" required>
+  The new y coordinate.
+</ParamField>
+
+<ParamField path="z" type="double" required>
+  The new z coordinate.
+</ParamField>
+
+<ResponseField name="return" type="Position">
+  A new position with updated coordinates and preserved rotation.
+</ResponseField>
+
+## Direction enum
+
+Represents cardinal directions in 3D space.
+
+```java
+public enum Direction {
+    DOWN(0, -1, 0),
+    UP(0, 1, 0),
+    NORTH(0, 0, -1),
+    SOUTH(0, 0, 1),
+    WEST(-1, 0, 0),
+    EAST(1, 0, 0)
+}
+```
+
+### Methods
+
+#### normalX(), normalY(), normalZ()
+
+Returns the direction's normal vector component.
+
+```java
+int x = Direction.EAST.normalX(); // 1
+int y = Direction.UP.normalY(); // 1
+int z = Direction.NORTH.normalZ(); // -1
+```
+
+<ResponseField name="return" type="int">
+  The normal vector component (-1, 0, or 1).
+</ResponseField>
+
+#### asPointer()
+
+Converts the direction to a Pointer.
+
+```java
+Pointer pointer = Direction.UP.asPointer();
+```
+
+<ResponseField name="return" type="Pointer">
+  A Pointer representing the direction's normal vector.
+</ResponseField>
+
+#### getOpposite()
+
+Returns the opposite direction.
+
+```java
+Direction opposite = Direction.UP.getOpposite(); // DOWN
+Direction opposite = Direction.NORTH.getOpposite(); // SOUTH
+```
+
+<ResponseField name="return" type="Direction">
+  The opposite direction.
+</ResponseField>
+
+#### Boolean checks
+
+```java
+boolean positive = direction.isPositive(); // x > 0 or y > 0 or z > 0
+boolean negative = direction.isNegative(); // opposite of isPositive
+boolean vertical = direction.isVertical(); // UP or DOWN
+boolean horizontal = direction.isHorizontal(); // not vertical
+```
+
+## Conversions utility
+
+Provides methods for converting between different coordinate systems.
+
+### Constants
+
+```java
+Conversions.CHUNK_SIZE // 16 blocks
+Conversions.REGION_SIZE // 512 blocks (32x32 chunks)
+Conversions.SECTION_BOUND // 15
+Conversions.CHUNK_BLOCK_COUNT // 4096 blocks
+```
+
+### Block conversions
+
+```java
+// Global to block coordinate (floor)
+int blockX = Conversions.Block.globalToBlock(10.7); // 10
+```
+
+### Section conversions
+
+```java
+// Global to section coordinate
+int sectionX = Conversions.Section.globalToSection(64);
+
+// Check if section aligned
+boolean aligned = Conversions.Section.isSectionAligned(x, y, z);
+boolean aligned = Conversions.Section.isSectionAligned(point);
+
+// Section index packing/unpacking
+long index = Conversions.Section.sectionIndex(secX, secY, secZ);
+int x = Conversions.Section.getXFromSectionIndex(index);
+int y = Conversions.Section.getYFromSectionIndex(index);
+int z = Conversions.Section.getZFromSectionIndex(index);
+```
+
+### Chunk conversions
+
+```java
+// Global to chunk coordinate
+int chunkX = Conversions.Chunk.globalToChunk(64);
+
+// Chunk index packing/unpacking
+long index = Conversions.Chunk.chunkIndex(chunkX, chunkZ);
+long index = Conversions.Chunk.chunkIndex(point);
+```
+
+### Region conversions
+
+```java
+// Global to region coordinate
+int regionX = Conversions.Region.globalToRegion(1000);
+
+// Region index packing/unpacking
+long index = Conversions.Region.regionIndex(regionX, regionZ);
+int x = Conversions.Region.getXFromIndex(index);
+int z = Conversions.Region.getZFromIndex(index);
+```
+
+### Formatting utilities
+
+```java
+// Format global coordinates
+String formatted = Conversions.formatGlobalCord(10.5, 64.0, 20.5);
+// Result: "(10.500, 64.000, 20.500)"
+
+String formatted = Conversions.formatGlobalCord(point);
+
+// Format block coordinates
+String formatted = Conversions.formatBlockCord(10, 64, 20);
+// Result: "(10, 64, 20)"
+
+String formatted = Conversions.formatBlockCord(point);
+```
+
+## Examples
+
+### Working with positions
+
+```java
+import com.wirethread.core.coordinates.*;
+
+// Create a position
+Position playerPos = new Position(100.5, 64.0, 200.5, 45f, 0f);
+
+// Move the player
+Position newPos = playerPos.add(0, 1, 0); // Move up
+Position moved = playerPos.relative(Direction.NORTH); // Move north
+
+// Rotate the player
+Position rotated = playerPos.withYaw(90f);
+Position looking = playerPos.withPitch(-30f);
+
+// Get block coordinates
+int blockX = playerPos.blockX();
+int blockY = playerPos.blockY();
+int blockZ = playerPos.blockZ();
+
+// Calculate distance
+double distance = playerPos.distance(targetPos);
+```
+
+### Coordinate conversions
+
+```java
+import com.wirethread.core.coordinates.Conversions;
+
+Position pos = new Position(257.5, 128.0, -33.7);
+
+// Get chunk coordinates
+int chunkX = Conversions.Chunk.globalToChunk(pos.x());
+int chunkZ = Conversions.Chunk.globalToChunk(pos.z());
+
+// Get region coordinates
+int regionX = Conversions.Region.globalToRegion(pos.blockX());
+int regionZ = Conversions.Region.globalToRegion(pos.blockZ());
+
+// Format for display
+String display = Conversions.formatGlobalCord(pos);
+System.out.println("Player at: " + display);
+```
+
+### Direction-based movement
+
+```java
+import com.wirethread.core.coordinates.*;
+
+public class MovementSystem {
+    public Position movePlayer(Position current, Direction direction, double distance) {
+        // Get direction normal
+        int dx = direction.normalX();
+        int dy = direction.normalY();
+        int dz = direction.normalZ();
+        
+        // Apply movement
+        return current.add(dx * distance, dy * distance, dz * distance);
+    }
+    
+    public Direction getOppositeDirection(Direction dir) {
+        return dir.getOpposite();
+    }
+    
+    public boolean isMovingVertically(Direction dir) {
+        return dir.isVertical();
+    }
+}
+```

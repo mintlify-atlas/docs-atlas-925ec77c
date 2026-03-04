@@ -1,0 +1,335 @@
+---
+title: Codecs
+description: Packet encoders and decoders in the Wirethread network module
+---
+
+Codecs are responsible for transforming between Java packet objects and binary network data. The Wirethread network module uses Netty's codec framework.
+
+## Overview
+
+The codec pipeline consists of two main components:
+
+- **InboundPacketDecoder** - Decodes incoming byte streams into packet objects
+- **OutboundPacketEncoder** - Encodes outgoing packet objects into byte streams
+
+These codecs are added to the Netty channel pipeline and automatically process network data.
+
+## InboundPacketDecoder
+
+Decodes incoming packets from clients.
+
+### Class definition
+
+```java
+public final class InboundPacketDecoder extends ByteToMessageDecoder {
+    
+    @Override
+    protected void decode(
+        ChannelHandlerContext ctx,
+        ByteBuf buffer,
+        List<Object> out
+    ) throws Exception {
+        if (!buffer.isReadable()) return;
+        
+        // Decoding logic
+    }
+}
+```
+
+<ParamField path="ctx" type="ChannelHandlerContext">
+  Netty channel context for accessing channel attributes
+</ParamField>
+
+<ParamField path="buffer" type="ByteBuf">
+  Input buffer containing raw network data
+</ParamField>
+
+<ParamField path="out" type="List<Object>">
+  Output list where decoded packets are added
+</ParamField>
+
+### Decoding process
+
+The decoder follows these steps:
+
+<Steps>
+  <Step title="Check buffer readability">
+    Returns early if no data is available
+    ```java
+    if (!buffer.isReadable()) return;
+    ```
+  </Step>
+  
+  <Step title="Get connection state">
+    Retrieves the current connection state from channel attributes
+    ```java
+    final ConnectionState clientConnectionState = 
+        ctx.channel().attr(CLIENT_CONNECTION_STATE_KEY).get();
+    final PacketRegistry<?> packetRegistry = 
+        ServerPacketRegistry.DEFAULT_REGISTRY.getRegistryOf(clientConnectionState);
+    ```
+  </Step>
+  
+  <Step title="Read packet header">
+    Extracts packet size and ID from the buffer
+    ```java
+    final PacketFormat packetFormat = PacketFormat.SERIALIZER.read(buffer);
+    final PacketHolder<?> packetType = packetRegistry.get(packetFormat.packetId());
+    ```
+  </Step>
+  
+  <Step title="Validate packet type">
+    Ensures the packet ID is registered
+    ```java
+    if (packetType == null) {
+        throw new IllegalResourceException(
+            "Missing packet registry.",
+            packetFormat.packetId()
+        );
+    }
+    ```
+  </Step>
+  
+  <Step title="Deserialize packet">
+    Uses the packet's serializer to read the payload
+    ```java
+    final Packet packet = packetType.type().read(buffer);
+    
+    if (packet == null) {
+        throw new InboundDecoderException(
+            "The packet deserialized returned null."
+        );
+    }
+    ```
+  </Step>
+  
+  <Step title="Add to output">
+    Adds the decoded packet to the output list for downstream handlers
+    ```java
+    LOGGER.info("Packet received from {}: {}", remoteAddress, packet);
+    out.add(packet);
+    ```
+  </Step>
+</Steps>
+
+### Exception handling
+
+The decoder catches specific exception types:
+
+```java
+@Override
+public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
+    switch (cause) {
+        case IllegalResourceException e -> 
+            LOGGER.error("An invalid resource was requested.", e);
+        default -> 
+            throw new InboundDecoderException("Panic: An exception was caught.", cause);
+    }
+}
+```
+
+<Warning>
+  `IllegalResourceException` indicates an unregistered packet ID. This may indicate:
+  - Protocol version mismatch
+  - Missing packet registration
+  - Corrupted network data
+</Warning>
+
+## OutboundPacketEncoder
+
+Encodes outgoing packets to clients.
+
+### Class definition
+
+```java
+public final class OutboundPacketEncoder extends MessageToByteEncoder<Packet> {
+    
+    @Override
+    protected void encode(
+        ChannelHandlerContext channelHandlerContext,
+        Packet packet,
+        ByteBuf byteBuf
+    ) throws Exception {
+        // Encoding logic
+    }
+}
+```
+
+<ParamField path="channelHandlerContext" type="ChannelHandlerContext">
+  Netty channel context
+</ParamField>
+
+<ParamField path="packet" type="Packet">
+  The packet object to encode
+</ParamField>
+
+<ParamField path="byteBuf" type="ByteBuf">
+  Output buffer for writing encoded data
+</ParamField>
+
+<Note>
+  The OutboundPacketEncoder implementation is currently minimal. Full encoding logic will serialize packets using their registered serializers.
+</Note>
+
+### Expected encoding process
+
+The encoder should follow this pattern:
+
+<Steps>
+  <Step title="Get packet registry">
+    Look up the packet ID from the registry
+  </Step>
+  
+  <Step title="Write packet header">
+    Write packet size and ID as VarInts
+  </Step>
+  
+  <Step title="Serialize payload">
+    Use the packet's serializer to write data to the buffer
+  </Step>
+</Steps>
+
+## Packet serializers
+
+Each packet type defines a static `SERIALIZER` field implementing the `Type<T>` interface.
+
+### Type interface
+
+```java
+public interface Type<T> {
+    void write(@NotNull ByteBuf buffer, T value) throws IOException;
+    T read(@NotNull ByteBuf buffer) throws IOException;
+}
+```
+
+<ParamField path="write">
+  Serializes a packet to the buffer
+  
+  <ParamField path="buffer" type="ByteBuf">
+    Target buffer for writing
+  </ParamField>
+  
+  <ParamField path="value" type="T">
+    The packet to serialize
+  </ParamField>
+</ParamField>
+
+<ParamField path="read">
+  Deserializes a packet from the buffer
+  
+  <ParamField path="buffer" type="ByteBuf">
+    Source buffer for reading
+  </ParamField>
+  
+  <ResponseField name="return" type="T">
+    The deserialized packet
+  </ResponseField>
+</ParamField>
+
+### Example serializer
+
+```java
+public record LoginStartPacket(
+    @NotNull String playerName,
+    @NotNull UUID playerId
+) implements ServerBoundPacket.Login {
+    
+    public static final Type<LoginStartPacket> SERIALIZER = new Type<>() {
+        @Override
+        public void write(@NotNull ByteBuf buffer, LoginStartPacket value) 
+                throws IOException {
+            Primitives.STRING.write(buffer, value.playerName);
+            Primitives.UUID_TYPE.write(buffer, value.playerId);
+        }
+        
+        @Override
+        public LoginStartPacket read(@NotNull ByteBuf buffer) throws IOException {
+            return new LoginStartPacket(
+                Primitives.STRING.read(buffer),
+                Primitives.UUID_TYPE.read(buffer)
+            );
+        }
+    };
+}
+```
+
+## Primitive types
+
+The `Primitives` and `Numbers` classes provide serializers for basic types:
+
+### Primitives
+
+- `STRING` - UTF-8 strings with length prefix
+- `UUID_TYPE` - 128-bit UUIDs
+- `INTENTION_TYPE` - ConnectionIntention enum
+
+### Numbers
+
+- `VAR_INT` - Variable-length integers (1-5 bytes)
+- `VAR_LONG` - Variable-length longs (1-10 bytes)
+- `UNSIGNED_SHORT` - 16-bit unsigned integers
+
+### Usage example
+
+```java
+// Reading primitives
+String playerName = Primitives.STRING.read(buffer);
+int protocolVersion = Numbers.VAR_INT.read(buffer);
+UUID playerId = Primitives.UUID_TYPE.read(buffer);
+
+// Writing primitives
+Primitives.STRING.write(buffer, "PlayerName");
+Numbers.VAR_INT.write(buffer, 765);
+Primitives.UUID_TYPE.write(buffer, UUID.randomUUID());
+```
+
+## TypeTemplate utility
+
+For simple single-field packets, use `TypeTemplate.template()`:
+
+```java
+public record StatusResponsePacket(
+    @NotNull String jsonResponse
+) implements ClientBoundPacket.Status {
+    
+    public static Type<StatusResponsePacket> SERIALIZER = TypeTemplate.template(
+        Primitives.STRING,              // Field serializer
+        StatusResponsePacket::jsonResponse,  // Getter
+        StatusResponsePacket::new       // Constructor
+    );
+}
+```
+
+This generates a serializer that:
+1. Reads/writes the field using the provided serializer
+2. Constructs the packet using the constructor reference
+
+## Pipeline configuration
+
+Codecs are added to the Netty channel pipeline during initialization:
+
+```java
+pipeline.addLast("decoder", new InboundPacketDecoder());
+pipeline.addLast("encoder", new OutboundPacketEncoder());
+pipeline.addLast("handler", new InboundHandlerAdapter());
+```
+
+<Info>
+  The order matters: decoders before handlers, encoders can be anywhere in the pipeline.
+</Info>
+
+## Error handling
+
+Codec errors are propagated through the pipeline:
+
+- **InboundDecoderException** - Decoder failure
+- **PacketFormatException** - Invalid packet structure
+- **PacketPayloadException** - Invalid packet data
+- **IllegalResourceException** - Unregistered packet ID
+
+These are caught by `InboundHandlerAdapter.exceptionCaught()`.
+
+## See also
+
+- [Packets](/api/network/packets) - Packet types and serializers
+- [Connections](/api/network/connections) - Connection state management

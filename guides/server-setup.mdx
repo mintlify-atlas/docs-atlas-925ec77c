@@ -1,0 +1,219 @@
+---
+title: Server setup and configuration
+description: Learn how to set up and configure a Wirethread server
+---
+
+This guide walks you through setting up a Wirethread server from scratch, configuring network settings, and understanding the server lifecycle.
+
+## Prerequisites
+
+Before starting, ensure you have:
+- Java 17 or higher installed
+- Basic knowledge of Minecraft server architecture
+- Wirethread dependencies in your project
+
+## Creating a basic server
+
+<Steps>
+  <Step title="Extend the Server class">
+    Create your server class by extending the abstract `Server` class:
+
+    ```java
+    package com.example.myserver;
+
+    import com.wirethread.server.Server;
+    import java.net.InetSocketAddress;
+    import java.net.SocketAddress;
+
+    public final class MyMinecraftServer extends Server {
+        
+        public static void main(String[] args) {
+            final Runtime runtime = Runtime.getRuntime();
+            
+            final MyMinecraftServer server = new MyMinecraftServer();
+            final SocketAddress serverAddress = new InetSocketAddress("localhost", 25565);
+            
+            server.start(serverAddress);
+            runtime.addShutdownHook(new Thread(server::stop));
+        }
+    }
+    ```
+
+    The `Server` class manages the core server state, process managers, and network threads.
+  </Step>
+
+  <Step title="Configure the server address">
+    You can start the server using either a `SocketAddress` or a hostname and port:
+
+    ```java
+    // Option 1: Using SocketAddress
+    SocketAddress address = new InetSocketAddress("0.0.0.0", 25565);
+    server.start(address);
+
+    // Option 2: Using hostname and port
+    server.start("0.0.0.0", 25565);
+    ```
+
+    The server will bind to this address and listen for incoming connections.
+  </Step>
+
+  <Step title="Add shutdown handling">
+    Always register a shutdown hook to properly stop the server:
+
+    ```java
+    Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+        LOGGER.info("Shutting down server...");
+        server.stop();
+    }));
+    ```
+
+    This ensures the server gracefully stops all threads and cleans up resources.
+  </Step>
+</Steps>
+
+## Understanding server components
+
+### Server state
+
+The server has two possible states defined in the `State` enum:
+- `STOPPED` - Server is not running
+- `STARTED` - Server is actively running
+
+You can check the current state:
+
+```java
+State currentState = server.getServerStatus();
+if (currentState == State.STARTED) {
+    LOGGER.info("Server is running");
+}
+```
+
+### Server process managers
+
+The `ServerProcess` record provides access to all server managers:
+
+```java
+public record ServerProcess(
+    WorldManager worldManager,
+    BlockManager blockManager,
+    CommandManager commandManager,
+    RecipeManager recipeManager,
+    TeamManager teamManager,
+    GlobalEventManager globalEventManager,
+    SchedulerManager schedulerManager,
+    AdvancementManager advancementManager,
+    BossBarManager bossBarManager,
+    ConnectionManager connectionManager,
+    BenchmarkManager benchmarkManager,
+    ExceptionManager exceptionManager
+)
+```
+
+Access these managers through the `serverProcess` field:
+
+```java
+var connectionManager = serverProcess.connectionManager();
+var exceptionManager = serverProcess.exceptionManager();
+```
+
+### Server threads
+
+Wirethread runs three main server threads:
+
+1. **SocketServerThread** - Handles network I/O and client connections
+2. **TickServerThread** - Manages the game tick loop
+3. **MQServerThread** - Processes message queue operations
+
+All threads are automatically started when you call `server.start()`.
+
+## Server brand name
+
+Retrieve the server brand identifier:
+
+```java
+String brandName = server.getServerBrandName(); // Returns "Wirethread"
+```
+
+## Registries
+
+Wirethread uses two types of registries:
+
+### Static registries
+
+Static registries contain immutable game data loaded at startup:
+
+```java
+StaticRegistries staticRegistries = server.staticRegistries;
+```
+
+### Dynamic registries
+
+Dynamic registries contain mutable runtime data:
+
+```java
+DynamicRegistries dynamicRegistries = server.serverRegistries;
+```
+
+## Error handling
+
+The server includes an `ExceptionManager` for centralized error handling:
+
+```java
+try {
+    // Server operations
+} catch (Exception exc) {
+    var exceptionManager = serverProcess.exceptionManager();
+    exceptionManager.handleException(exc);
+}
+```
+
+## Full example
+
+Here's a complete server implementation with logging:
+
+```java
+package com.example.myserver;
+
+import com.wirethread.server.Server;
+import com.wirethread.server.State;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
+import java.net.InetSocketAddress;
+import java.net.SocketAddress;
+
+public final class MyMinecraftServer extends Server {
+    
+    private static final Logger LOGGER = LogManager.getLogger(MyMinecraftServer.class);
+    
+    public static void main(String[] args) {
+        final Runtime runtime = Runtime.getRuntime();
+        final MyMinecraftServer server = new MyMinecraftServer();
+        
+        // Configure server address
+        final String host = args.length > 0 ? args[0] : "0.0.0.0";
+        final int port = args.length > 1 ? Integer.parseInt(args[1]) : 25565;
+        final SocketAddress serverAddress = new InetSocketAddress(host, port);
+        
+        // Start the server
+        LOGGER.info("Starting server on {}:{}", host, port);
+        server.start(serverAddress);
+        
+        // Register shutdown hook
+        runtime.addShutdownHook(new Thread(() -> {
+            if (server.getServerStatus() == State.STARTED) {
+                LOGGER.info("Shutting down server...");
+                server.stop();
+            }
+        }));
+        
+        LOGGER.info("Server started successfully!");
+    }
+}
+```
+
+## Next steps
+
+- Learn how to create plugins with the [Creating plugins](/guides/creating-plugins) guide
+- Handle network packets in the [Packet handling](/guides/packet-handling) guide
+- Manage worlds and dimensions in the [World management](/guides/world-management) guide

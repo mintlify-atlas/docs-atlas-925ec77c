@@ -1,0 +1,174 @@
+---
+title: Server
+description: Core server class for managing Wirethread server instances
+---
+
+The `Server` class is the abstract base class for Wirethread server implementations. It manages the server lifecycle, threading architecture, and core server processes.
+
+## Package
+
+```java
+com.wirethread.server.Server
+```
+
+## Constructor
+
+### `Server()`
+
+Creates a new server instance with default configurations:
+- Initial state set to `STOPPED`
+- Initializes `ServerProcess` with managers for connections, benchmarks, and exceptions
+- Sets up dynamic registries
+
+```java
+protected Server() {
+    this.serverState = new AtomicReference<>(State.STOPPED);
+    this.serverProcess = new ServerProcess(
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        new ConnectionManager(),
+        new BenchmarkManager(),
+        new ExceptionManager()
+    );
+    this.serverRegistries = new DynamicRegistries(null);
+}
+```
+
+## Methods
+
+### `start(SocketAddress socketAddress)`
+
+Starts the server using a generic socket address.
+
+**Parameters:**
+- `socketAddress` - A socket that the server will listen for connections
+
+**Throws:**
+- `IllegalStateException` - If the server is already started
+
+**Example:**
+```java
+SocketAddress address = new InetSocketAddress("localhost", 25565);
+server.start(address);
+```
+
+This method performs the following operations:
+1. Validates the server state (must be `STOPPED`)
+2. Transitions state from `STOPPED` to `STARTED`
+3. Starts three core threads:
+   - `TickServerThread` - Handles game tick processing
+   - `MQServerThread` - Manages message queue operations
+   - `SocketServerThread` - Handles incoming client connections
+
+### `start(String address, int port)`
+
+Starts the server using a specific address and port.
+
+**Parameters:**
+- `address` - The address which the socket will listen for connections
+- `port` - The port which the socket will listen for connections
+
+**Example:**
+```java
+server.start("0.0.0.0", 25565);
+```
+
+### `stop()`
+
+Stops the server and shuts down all running threads.
+
+**Throws:**
+- `IllegalStateException` - If the server is already stopped
+- `RuntimeException` - If an exception occurs during shutdown
+
+**Example:**
+```java
+server.stop();
+```
+
+This method:
+1. Validates the server state (must be `STARTED`)
+2. Transitions state from `STARTED` to `STOPPED`
+3. Shuts down all server threads in sequence:
+   - Socket worker
+   - Tick worker
+   - Message queue worker
+
+### `getServerStatus()`
+
+Retrieves the current status of the server.
+
+**Returns:** `State` - Either `STARTED` or `STOPPED`
+
+**Example:**
+```java
+State status = server.getServerStatus();
+if (status == State.STARTED) {
+    // Server is running
+}
+```
+
+### `getServerBrandName()`
+
+Retrieves the server brand name.
+
+**Returns:** `String` - Always returns "Wirethread"
+
+**Example:**
+```java
+String brand = server.getServerBrandName(); // "Wirethread"
+```
+
+## Fields
+
+### `serverState`
+
+An `AtomicReference<State>` that contains the global server state. Thread-safe access to the current server status.
+
+### `serverProcess`
+
+A `ServerProcess` record containing references to all server process managers:
+- `WorldManager`
+- `BlockManager`
+- `CommandManager`
+- `RecipeManager`
+- `TeamManager`
+- `GlobalEventManager`
+- `SchedulerManager`
+- `AdvancementManager`
+- `BossBarManager`
+- `ConnectionManager`
+- `BenchmarkManager`
+- `ExceptionManager`
+
+### `serverRegistries`
+
+Contains dynamic game registries for runtime-loaded content.
+
+### `staticRegistries`
+
+Contains static game registries for compile-time content.
+
+## Thread-safe operations
+
+The `Server` class uses atomic operations for state management:
+
+```java
+// State transitions are atomic and thread-safe
+if (!this.serverState.compareAndSet(State.STOPPED, State.STARTED)) {
+    throw new IllegalStateException("Server already started.");
+}
+```
+
+This ensures that concurrent calls to `start()` or `stop()` will fail safely without race conditions.
+
+## Source reference
+
+See `Server.java:20` for the complete implementation.
